@@ -1,0 +1,1 @@
+<a href="https://codeclimate.com/github/DieWerkself/frontend-project-44/maintainability"><img src="https://api.codeclimate.com/v1/badges/8257451956e27be66dc1/maintainability" /></a>
