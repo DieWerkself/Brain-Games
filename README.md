@@ -5,3 +5,6 @@ Brain-Even Game
 
 Brain-Calc Game
 [![asciicast](https://asciinema.org/a/qTQC1NvawTfrCdhsuvFS7IhMH.svg)](https://asciinema.org/a/qTQC1NvawTfrCdhsuvFS7IhMH)
+
+Brain-Gcd Game
+[![asciicast](https://asciinema.org/a/YrgHxmuB7pZrOVNFkULo91XuH.svg)](https://asciinema.org/a/YrgHxmuB7pZrOVNFkULo91XuH)
