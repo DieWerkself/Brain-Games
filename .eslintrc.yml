@@ -17,6 +17,8 @@ parserOptions:
 
 rules:
   indent: [2, "tab"]
+  trailing-comma: 0
+  comma-dangle: 0
   no-tabs: 0
   no-console: 0
   import/extensions: # FIXME: remove when rule will be adjusted for new nodejs version
