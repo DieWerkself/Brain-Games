@@ -1,5 +1,4 @@
 ---
-
 # plugins:
 #   # https://github.com/jest-community/eslint-plugin-jest
 #   - jest
@@ -16,7 +15,7 @@ parserOptions:
   ecmaVersion: latest
 
 rules:
-  indent: [2, "tab"]
+  indent: [2, 'tab']
   trailing-comma: 0
   comma-dangle: 0
   no-tabs: 0
@@ -25,4 +24,4 @@ rules:
     - error
     - ignorePackages
     - js: always
-  no-underscore-dangle: [2, { "allow": ["__filename", "__dirname"] }]
+  no-underscore-dangle: [2, { 'allow': ['__filename', '__dirname'] }]

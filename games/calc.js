@@ -7,7 +7,7 @@ export default (name) => {
 	const mathAction = {
 		'+': (a, b) => a + b,
 		'-': (a, b) => a - b,
-		'*': (a, b) => a * b
+		'*': (a, b) => a * b,
 	};
 
 	const makeRandom = () => {
@@ -15,7 +15,10 @@ export default (name) => {
 		const randomSecondInt = random();
 		const randomOperator = operations[random(operations.length)];
 		const question = `${randomFirstInt} ${randomOperator} ${randomSecondInt}`;
-		const correctAnswer = mathAction[randomOperator](randomFirstInt, randomSecondInt).toString();
+		const correctAnswer = mathAction[randomOperator](
+			randomFirstInt,
+			randomSecondInt
+		).toString();
 		return [correctAnswer, question];
 	};
 

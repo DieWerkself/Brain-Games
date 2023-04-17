@@ -9,7 +9,9 @@ export default (name, game) => {
 		if (answer === correctAnswer) {
 			console.log('Correct!');
 		} else {
-			return console.log(`${answer} is wrong answer ;(. Correct answer was ${correctAnswer}.`);
+			return console.log(
+				`${answer} is wrong answer ;(. Correct answer was ${correctAnswer}.`
+			);
 		}
 	}
 	return console.log(`Congratulations, ${name}!`);
