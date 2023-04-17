@@ -49,6 +49,7 @@ in your console. Congratulations! Now you are ready to play.
 ## Games:
 
 ## Brain-Even Game
+
 More info: https://ru.wikipedia.org/wiki/%D0%A7%D1%91%D1%82%D0%BD%D1%8B%D0%B5_%D0%B8_%D0%BD%D0%B5%D1%87%D1%91%D1%82%D0%BD%D1%8B%D0%B5_%D1%87%D0%B8%D1%81%D0%BB%D0%B0
 
 For start enter in your console:
@@ -70,6 +71,7 @@ brain-calc
 [![asciicast](https://asciinema.org/a/IWJu267DEndugHptAI8jyPjNY.svg)](https://asciinema.org/a/IWJu267DEndugHptAI8jyPjNY)
 
 ## Brain-Gcd Game
+
 More info: https://ru.wikipedia.org/wiki/%D0%9D%D0%B0%D0%B8%D0%B1%D0%BE%D0%BB%D1%8C%D1%88%D0%B8%D0%B9_%D0%BE%D0%B1%D1%89%D0%B8%D0%B9_%D0%B4%D0%B5%D0%BB%D0%B8%D1%82%D0%B5%D0%BB%D1%8C
 
 For start enter in your console:
@@ -91,6 +93,7 @@ brain-progression
 [![asciicast](https://asciinema.org/a/Rf4mWMtQpWqN0Am8Ejup1EEyt.svg)](https://asciinema.org/a/Rf4mWMtQpWqN0Am8Ejup1EEyt)
 
 ## Brain-Prime Game
+
 More info: https://ru.wikipedia.org/wiki/%D0%9F%D1%80%D0%BE%D1%81%D1%82%D0%BE%D0%B5_%D1%87%D0%B8%D1%81%D0%BB%D0%BE
 
 For start enter in your console:
