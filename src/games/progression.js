@@ -18,7 +18,7 @@ export default (name) => {
 		const correctAnswer = question[randomIndex];
 		question[randomIndex] = '..';
 
-		return [correctAnswer.toString(), question.toString()];
+		return [correctAnswer.toString(), question.join(' ')];
 	};
 
 	return mainLogic(name, getProgression);
