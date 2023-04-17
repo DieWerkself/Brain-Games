@@ -13,6 +13,11 @@ Next, you will be shown the rules of each specific game.
 Each game includes three rounds. If you answer all three questions correctly, you win.
 In case of an incorrect answer on any of the rounds, the game ends and you can start it again.
 
+## **_Min specs:_**
+
+> Node.js v13 and above.
+> Windows 10 with WSL or macOS 10.15+ or any current linux distributive.
+
 ## **_Installing instructions:_**
 
 Just clone this repository to your machine using
