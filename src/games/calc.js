@@ -1,16 +1,15 @@
-import mainLogic from '../index.js';
+import mainLogic, { random } from '../../index.js';
 
 export default (name) => {
 	console.log('What is the result of the expression?');
 	const operations = ['+', '-', '*'];
-	const random = (num = 100) => Math.trunc(Math.random() * num);
 	const mathAction = {
 		'+': (a, b) => a + b,
 		'-': (a, b) => a - b,
 		'*': (a, b) => a * b,
 	};
 
-	const makeRandom = () => {
+	const getRandomExpression = () => {
 		const randomFirstInt = random();
 		const randomSecondInt = random();
 		const randomOperator = operations[random(operations.length)];
@@ -18,9 +17,9 @@ export default (name) => {
 		const correctAnswer = mathAction[randomOperator](
 			randomFirstInt,
 			randomSecondInt
-		).toString();
-		return [correctAnswer, question];
+		);
+		return [correctAnswer.toString(), question];
 	};
 
-	return mainLogic(name, makeRandom);
+	return mainLogic(name, getRandomExpression);
 };

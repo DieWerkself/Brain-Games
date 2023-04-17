@@ -1,11 +1,12 @@
-import mainLogic from '../index.js';
+import mainLogic, { random } from '../../index.js';
 
 export default (name) => {
 	console.log('Answer "yes" if given number is prime. Otherwise answer "no".');
 
-	const checkPrimeNumber = () => {
+	const getPrimeNumber = () => {
+		const randomNum = random();
 		let isPrime = true;
-		const randomNum = Math.trunc(Math.random() * 100);
+
 		if (randomNum > 1) {
 			for (let i = 2; i < randomNum; i += 1) {
 				if (randomNum % i === 0) {
@@ -22,5 +23,5 @@ export default (name) => {
 		return [correctAnswer, randomNum];
 	};
 
-	return mainLogic(name, checkPrimeNumber);
+	return mainLogic(name, getPrimeNumber);
 };

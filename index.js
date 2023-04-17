@@ -16,3 +16,5 @@ export default (name, game) => {
 	}
 	return console.log(`Congratulations, ${name}!`);
 };
+
+export const random = (num = 100, add = 0) => Math.trunc(Math.random() * num + add);
