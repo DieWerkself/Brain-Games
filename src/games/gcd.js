@@ -4,8 +4,8 @@ export default (name) => {
   console.log('Find the greatest common divisor of given numbers.');
 
   const getGcd = () => {
-    let firstInt = random();
-    let secondInt = random();
+    let firstInt = random(50, 1);
+    let secondInt = random(50, 1);
     const question = `${firstInt} ${secondInt}`;
     while (firstInt !== secondInt) {
       if (firstInt > secondInt) {
