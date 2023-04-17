@@ -16,7 +16,7 @@ export default (name) => {
     const question = `${randomFirstInt} ${randomOperator} ${randomSecondInt}`;
     const correctAnswer = mathAction[randomOperator](
       randomFirstInt,
-      randomSecondInt
+      randomSecondInt,
     );
     return [correctAnswer.toString(), question];
   };
