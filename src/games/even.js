@@ -1,12 +1,15 @@
-import mainLogic, { random } from '../../index.js';
+import runMainLogic from '../index.js';
+import randomNumber from '../lib.js';
 
-export default (name) => {
-  console.log('Answer "yes" if the number is even, otherwise answer "no".');
+const rule = 'Answer "yes" if the number is even, otherwise answer "no".';
 
-  const getRandomInt = () => {
-    const randomInt = random(50);
-    const correctAnswer = randomInt % 2 ? 'no' : 'yes';
-    return [correctAnswer, randomInt];
+export default () => {
+  const getRandomNum = () => {
+    const randomNum = randomNumber(1, 50);
+    const isEven = (num) => num % 2;
+    const correctAnswer = isEven(randomNum) ? 'no' : 'yes';
+    return [correctAnswer, randomNum];
   };
-  return mainLogic(name, getRandomInt);
+
+  runMainLogic(rule, getRandomNum);
 };

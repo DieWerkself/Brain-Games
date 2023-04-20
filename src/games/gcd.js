@@ -1,21 +1,28 @@
-import mainLogic, { random } from '../../index.js';
+import runMainLogic from '../index.js';
+import randomNumber from '../lib.js';
 
-export default (name) => {
-  console.log('Find the greatest common divisor of given numbers.');
+const rule = 'Find the greatest common divisor of given numbers.';
 
-  const getGcd = () => {
-    let firstInt = random(50, 1);
-    let secondInt = random(50, 1);
-    const question = `${firstInt} ${secondInt}`;
-    while (firstInt !== secondInt) {
-      if (firstInt > secondInt) {
-        firstInt -= secondInt;
-      } else {
-        secondInt -= firstInt;
-      }
+const findGcd = (num1, num2) => {
+  while (num1 !== num2) {
+    if (num1 > num2) {
+      num1 -= num2;
+    } else {
+      num2 -= num1;
     }
-    return [firstInt.toString(), question];
+  }
+
+  return num1;
+};
+
+export default () => {
+  const getGcd = () => {
+    const number1 = randomNumber(1, 50);
+    const number2 = randomNumber(1, 50);
+    const question = `${number1} ${number2}`;
+    const correctAnswer = findGcd(number1, number2);
+    return [correctAnswer.toString(), question];
   };
 
-  return mainLogic(name, getGcd);
+  runMainLogic(rule, getGcd);
 };

@@ -16,5 +16,3 @@ publish:
 		npm publish --dry-run
 lint:
 		npx eslint .
-pret:
-		npx prettier --single-quote --use-tabs --write .

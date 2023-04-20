@@ -1,25 +1,31 @@
-import mainLogic, { random } from '../../index.js';
+import runMainLogic from '../index.js';
+import randomNumber from '../lib.js';
 
-export default (name) => {
-  console.log('What number is missing in the progression?');
+const rule = 'What number is missing in the progression?';
 
+const buildProgression = () => {
+  const progressionArray = [];
+  let randomNum = randomNumber(1, 50);
+  const progressionLength = randomNumber(5, 10);
+  const randomStepValue = randomNumber(1, 10);
+  const maxIndexValue = progressionLength - 1;
+  const randomIndex = randomNumber(0, maxIndexValue);
+
+  for (let i = 0; i < progressionLength; i += 1) {
+    randomNum += randomStepValue;
+    progressionArray.push(randomNum);
+  }
+
+  return [progressionArray, randomIndex];
+};
+
+export default () => {
   const getProgression = () => {
-    const question = [];
-    let randomNum = random();
-
-    const progressionLength = random(15, 5);
-    const randomIndex = random(progressionLength);
-
-    for (let i = 0; i < progressionLength; i += 1) {
-      randomNum += randomIndex + 1;
-      question.push(randomNum);
-    }
-
+    const [question, randomIndex] = buildProgression();
     const correctAnswer = question[randomIndex];
     question[randomIndex] = '..';
-
     return [correctAnswer.toString(), question.join(' ')];
   };
 
-  return mainLogic(name, getProgression);
+  runMainLogic(rule, getProgression);
 };

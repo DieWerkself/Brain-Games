@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "type": "module",
   "description": "First practical project",
-  "main": "index.js",
   "bin": {
     "brain-games": "bin/brain-games.js",
     "brain-even": "bin/brain-even.js",
@@ -20,8 +19,7 @@
   "devDependencies": {
     "eslint": "^8.38.0",
     "eslint-config-airbnb-base": "^15.0.0",
-    "eslint-plugin-import": "^2.27.5",
-    "prettier": "^2.8.7"
+    "eslint-plugin-import": "^2.27.5"
   },
   "dependencies": {
     "readline-sync": "^1.4.10"
