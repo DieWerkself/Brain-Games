@@ -4,15 +4,18 @@ import randomNumber from '../lib.js';
 const rule = 'Find the greatest common divisor of given numbers.';
 
 const findGcd = (num1, num2) => {
-  while (num1 !== num2) {
-    if (num1 > num2) {
-      num1 -= num2;
+  let a = num1;
+  let b = num2;
+
+  while (a !== num2) {
+    if (a > b) {
+      a -= b;
     } else {
-      num2 -= num1;
+      b -= a;
     }
   }
 
-  return num1;
+  return a;
 };
 
 export default () => {
