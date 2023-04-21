@@ -7,7 +7,7 @@ const findGcd = (num1, num2) => {
   let a = num1;
   let b = num2;
 
-  while (a !== num2) {
+  while (a !== b) {
     if (a > b) {
       a -= b;
     } else {
