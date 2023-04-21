@@ -4,20 +4,15 @@ import randomNumber from '../lib.js';
 const rule = 'Answer "yes" if given number is prime. Otherwise answer "no".';
 
 const isPrime = (num) => {
-  let condition = true;
+  if (num <= 1) return false;
 
-  if (num > 1) {
-    for (let i = 2; i < num; i += 1) {
-      if (num % i === 0) {
-        condition = false;
-        break;
-      }
+  for (let i = 2; i < num; i += 1) {
+    if (num % i === 0) {
+      return false;
     }
-  } else {
-    condition = false;
   }
 
-  return condition;
+  return true;
 };
 
 export default () => {
