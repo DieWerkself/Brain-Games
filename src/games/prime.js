@@ -16,9 +16,9 @@ const isPrime = (num) => {
 };
 
 const getPrimeNumber = () => {
-  const randomNum = getRandomNumber(1, 50);
-  const correctAnswer = isPrime(randomNum) ? 'yes' : 'no';
-  return [correctAnswer, randomNum];
+  const randomNumber = getRandomNumber(1, 50);
+  const answer = isPrime(randomNumber) ? 'yes' : 'no';
+  return [answer, randomNumber];
 };
 
 export default () => {

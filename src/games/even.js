@@ -7,8 +7,8 @@ const isEven = (number) => number % 2;
 
 const getEvenNumber = () => {
   const randomNumber = getRandomNumber(1, 50);
-  const correctAnswer = isEven(randomNumber) ? 'no' : 'yes';
-  return [correctAnswer, randomNumber];
+  const answer = isEven(randomNumber) ? 'no' : 'yes';
+  return [answer, randomNumber];
 };
 
 export default () => {

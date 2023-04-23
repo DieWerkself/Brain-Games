@@ -12,7 +12,7 @@ const calculate = (operator, a, b) => {
     case '*':
       return a * b;
     default:
-      throw new Error(operator);
+      throw new Error(`Error: ${operator}`);
   }
 };
 
@@ -22,8 +22,8 @@ const generateRound = () => {
   const number2 = getRandomNumber(1, 50);
   const randomOperator = operators[getRandomNumber(0, operators.length - 1)];
   const question = `${number1} ${randomOperator} ${number2}`;
-  const correctAnswer = calculate(randomOperator, number1, number2);
-  return [correctAnswer.toString(), question];
+  const answer = calculate(randomOperator, number1, number2);
+  return [answer.toString(), question];
 };
 
 export default () => {
