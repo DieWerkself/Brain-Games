@@ -3,7 +3,7 @@ import getRandomNumber from '../lib.js';
 
 const description = 'What is the result of the expression?';
 
-const operators = ['+', '-', '*'];
+
 
 const calculate = (operator, a, b) => {
   switch (operator) {
@@ -14,11 +14,12 @@ const calculate = (operator, a, b) => {
     case '*':
       return a * b;
     default:
-      throw new Error('Error');
+      throw new Error(operator);
   }
 };
 
 const generateRound = () => {
+  const operators = ['+', '-', '*'];
   const number1 = getRandomNumber(1, 50);
   const number2 = getRandomNumber(1, 50);
   const randomOperator = operators[getRandomNumber(0, operators.length - 1)];

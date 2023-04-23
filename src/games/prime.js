@@ -15,12 +15,13 @@ const isPrime = (num) => {
   return true;
 };
 
+const getPrimeNumber = () => {
+  const randomNum = getRandomNumber(1, 50);
+  const correctAnswer = isPrime(randomNum) ? 'yes' : 'no';
+  return [correctAnswer, randomNum];
+};
+
 export default () => {
-  const getPrimeNumber = () => {
-    const randomNum = getRandomNumber(1, 50);
-    const correctAnswer = isPrime(randomNum) ? 'yes' : 'no';
-    return [correctAnswer, randomNum];
-  };
 
   runMainLogic(description, getPrimeNumber);
 };
