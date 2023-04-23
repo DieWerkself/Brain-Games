@@ -1,7 +1,7 @@
 import runMainLogic from '../index.js';
-import randomNumber from '../lib.js';
+import getRandomNumber from '../lib.js';
 
-const rule = 'Answer "yes" if given number is prime. Otherwise answer "no".';
+const description = 'Answer "yes" if given number is prime. Otherwise answer "no".';
 
 const isPrime = (num) => {
   if (num <= 1) return false;
@@ -17,10 +17,10 @@ const isPrime = (num) => {
 
 export default () => {
   const getPrimeNumber = () => {
-    const randomNum = randomNumber(1, 50);
+    const randomNum = getRandomNumber(1, 50);
     const correctAnswer = isPrime(randomNum) ? 'yes' : 'no';
     return [correctAnswer, randomNum];
   };
 
-  runMainLogic(rule, getPrimeNumber);
+  runMainLogic(description, getPrimeNumber);
 };
