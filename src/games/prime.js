@@ -22,6 +22,5 @@ const getPrimeNumber = () => {
 };
 
 export default () => {
-
   runMainLogic(description, getPrimeNumber);
 };

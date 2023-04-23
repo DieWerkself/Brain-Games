@@ -3,8 +3,6 @@ import getRandomNumber from '../lib.js';
 
 const description = 'What is the result of the expression?';
 
-
-
 const calculate = (operator, a, b) => {
   switch (operator) {
     case '+':

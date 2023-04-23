@@ -6,9 +6,8 @@ const description = 'What number is missing in the progression?';
 const buildProgression = (startNumber, length, step) => {
   const progressionArray = [];
 
-  for (let i = 0; i < length; i += 1) {
-    startNumber += step;
-    progressionArray.push(startNumber);
+  for (let i = startNumber; progressionArray.length < length; i += step) {
+    progressionArray.push(i);
   }
 
   return progressionArray;
