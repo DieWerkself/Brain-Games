@@ -1,0 +1,1010 @@
+const EVENT_TYPE_CONFIG = {
+  emergency: { label: 'Emergency', labelRu: 'Экстренное', color: '#E53935', textColor: '#fff' },
+  normal: { label: 'Normal', labelRu: 'Нормальное', color: '#1565C0', textColor: '#fff' },
+  standard: { label: 'Standard', labelRu: 'Стандартное', color: '#2E7D32', textColor: '#fff' },
+  jira: { label: 'Jira Task', labelRu: 'Задача Jira', color: '#EF6C00', textColor: '#fff' },
+  maintenance: { label: 'Maintenance', labelRu: 'Плановое ТО', color: '#6A1B9A', textColor: '#fff' },
+  freeze: { label: 'Change Freeze', labelRu: 'Заморозка', color: '#455A64', textColor: '#fff' },
+};
+
+const SOURCE_CONFIG = {
+  simpleone: { label: 'SimpleOne', icon: 'S1' },
+  jira: { label: 'Jira', icon: 'J' },
+};
+
+const RISK_CONFIG = {
+  high: { labelRu: 'Высокий', icon: '▲', color: '#E53935' },
+  medium: { labelRu: 'Средний', icon: '●', color: '#EF6C00' },
+  low: { labelRu: 'Низкий', icon: '▽', color: '#2E7D32' },
+};
+
+const MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const WEEKDAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const ALL_EVENT_TYPES = ['emergency','normal','standard','jira','maintenance','freeze'];
+const ALL_SOURCES = ['simpleone','jira'];
+
+const DEMO_SERVICES = ['CRM-система','ERP SAP','Портал сотрудников','Active Directory','Почтовый сервер','Система мониторинга','1С:Бухгалтерия','VPN-шлюз','Корпоративный сайт','Система резервного копирования'];
+const DEMO_DEPARTMENTS = ['Отдел инфраструктуры','Отдел разработки','Отдел ИБ','Отдел сопровождения','Отдел сетей'];
+const DEMO_ASSIGNEES = ['Иванов А.С.','Петрова М.В.','Сидоров К.Н.','Козлова Е.А.','Морозов Д.И.','Волкова О.П.','Новиков С.Г.','Федорова Т.Л.'];
+
+function generateDemoEvents() {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  return [
+    { id:'CHG-001', title:'Экстренный патч безопасности AD', startDate:new Date(y,m,3,2,0), endDate:new Date(y,m,3,5,0), eventType:'emergency', source:'simpleone', priority:1, riskLevel:'high', serviceName:'Active Directory', assignee:'Иванов А.С.', department:'Отдел ИБ', description:'Критическая уязвимость CVE-2026-XXXX. Требуется немедленное обновление.' },
+    { id:'CHG-002', title:'Восстановление VPN после сбоя', startDate:new Date(y,m,15,22,0), endDate:new Date(y,m,16,4,0), eventType:'emergency', source:'simpleone', priority:1, riskLevel:'high', serviceName:'VPN-шлюз', assignee:'Морозов Д.И.', department:'Отдел сетей', description:'Аварийное восстановление VPN-концентратора.' },
+    { id:'CHG-003', title:'Обновление CRM до версии 4.2', startDate:new Date(y,m,5,22,0), endDate:new Date(y,m,7,6,0), eventType:'normal', source:'simpleone', priority:2, riskLevel:'medium', serviceName:'CRM-система', assignee:'Петрова М.В.', department:'Отдел разработки', description:'Плановое обновление CRM. Включает миграцию данных.' },
+    { id:'CHG-004', title:'Миграция почтового сервера', startDate:new Date(y,m,10,0,0), endDate:new Date(y,m,12,23,59), eventType:'normal', source:'simpleone', priority:2, riskLevel:'high', serviceName:'Почтовый сервер', assignee:'Сидоров К.Н.', department:'Отдел инфраструктуры', description:'Миграция с Exchange 2019 на Exchange Online.', hasConflict:true },
+    { id:'CHG-005', title:'Расширение кластера мониторинга', startDate:new Date(y,m,10,18,0), endDate:new Date(y,m,11,6,0), eventType:'normal', source:'simpleone', priority:3, riskLevel:'medium', serviceName:'Почтовый сервер', assignee:'Козлова Е.А.', department:'Отдел инфраструктуры', description:'Добавление нод в кластер Prometheus/Grafana. Требует перезапуска почтового сервера.', hasConflict:true },
+    { id:'CHG-006', title:'Обновление SAP EHP8', startDate:new Date(y,m,18,22,0), endDate:new Date(y,m,20,6,0), eventType:'normal', source:'simpleone', priority:2, riskLevel:'high', serviceName:'ERP SAP', assignee:'Новиков С.Г.', department:'Отдел сопровождения', description:'Установка Enhancement Package 8.' },
+    { id:'CHG-007', title:'Добавление пользователей в AD', startDate:new Date(y,m,2,10,0), endDate:new Date(y,m,2,12,0), eventType:'standard', source:'simpleone', priority:4, riskLevel:'low', serviceName:'Active Directory', assignee:'Иванов А.С.', department:'Отдел инфраструктуры' },
+    { id:'CHG-008', title:'Обновление SSL-сертификатов', startDate:new Date(y,m,8,9,0), endDate:new Date(y,m,8,11,0), eventType:'standard', source:'simpleone', priority:3, riskLevel:'low', serviceName:'Корпоративный сайт', assignee:'Морозов Д.И.', department:'Отдел сетей' },
+    { id:'CHG-009', title:'Настройка бэкапа новых БД', startDate:new Date(y,m,14,14,0), endDate:new Date(y,m,14,17,0), eventType:'standard', source:'simpleone', priority:4, riskLevel:'low', serviceName:'Система резервного копирования', assignee:'Козлова Е.А.', department:'Отдел инфраструктуры' },
+    { id:'CHG-010', title:'Обновление антивирусных баз', startDate:new Date(y,m,22,3,0), endDate:new Date(y,m,22,5,0), eventType:'standard', source:'simpleone', priority:5, riskLevel:'low', serviceName:'Active Directory', assignee:'Иванов А.С.', department:'Отдел ИБ' },
+    { id:'JIRA-101', title:'Деплой фронтенда портала v3.1', startDate:new Date(y,m,4,10,0), endDate:new Date(y,m,4,14,0), eventType:'jira', source:'jira', priority:2, riskLevel:'medium', serviceName:'Портал сотрудников', assignee:'Петрова М.В.', department:'Отдел разработки' },
+    { id:'JIRA-102', title:'Релиз API v2.0 для CRM', startDate:new Date(y,m,7,16,0), endDate:new Date(y,m,8,2,0), eventType:'jira', source:'jira', priority:2, riskLevel:'medium', serviceName:'CRM-система', assignee:'Волкова О.П.', department:'Отдел разработки' },
+    { id:'JIRA-103', title:'Интеграция SSO для портала', startDate:new Date(y,m,12,10,0), endDate:new Date(y,m,13,18,0), eventType:'jira', source:'jira', priority:3, riskLevel:'medium', serviceName:'Портал сотрудников', assignee:'Федорова Т.Л.', department:'Отдел разработки' },
+    { id:'JIRA-104', title:'Миграция БД на PostgreSQL 16', startDate:new Date(y,m,19,0,0), endDate:new Date(y,m,20,6,0), eventType:'jira', source:'jira', priority:2, riskLevel:'high', serviceName:'ERP SAP', assignee:'Сидоров К.Н.', department:'Отдел разработки' },
+    { id:'JIRA-105', title:'Обновление UI-библиотеки', startDate:new Date(y,m,25,10,0), endDate:new Date(y,m,25,16,0), eventType:'jira', source:'jira', priority:4, riskLevel:'low', serviceName:'Портал сотрудников', assignee:'Петрова М.В.', department:'Отдел разработки' },
+    { id:'MW-001', title:'Плановое ТО серверной инфраструктуры', startDate:new Date(y,m,9,2,0), endDate:new Date(y,m,9,8,0), eventType:'maintenance', source:'simpleone', priority:3, riskLevel:'medium', serviceName:'Система резервного копирования', assignee:'Новиков С.Г.', department:'Отдел инфраструктуры' },
+    { id:'MW-002', title:'ТО сетевого оборудования', startDate:new Date(y,m,16,2,0), endDate:new Date(y,m,16,6,0), eventType:'maintenance', source:'simpleone', priority:3, riskLevel:'medium', serviceName:'VPN-шлюз', assignee:'Морозов Д.И.', department:'Отдел сетей' },
+    { id:'MW-003', title:'Плановое ТО СХД', startDate:new Date(y,m,23,1,0), endDate:new Date(y,m,23,7,0), eventType:'maintenance', source:'simpleone', priority:3, riskLevel:'medium', serviceName:'Система резервного копирования', assignee:'Козлова Е.А.', department:'Отдел инфраструктуры' },
+    { id:'FRZ-001', title:'Заморозка: закрытие квартала', startDate:new Date(y,m,26,0,0), endDate:new Date(y,m,28,23,59), eventType:'freeze', source:'simpleone', priority:1, riskLevel:'high', serviceName:'ERP SAP', assignee:'Новиков С.Г.', department:'Отдел сопровождения', description:'Период заморозки изменений на время закрытия квартала.' },
+  ];
+}
+
+const DEMO_EVENTS = generateDemoEvents();
+
+const DEFAULT_PRESETS = [
+  { id:'all', name:'Все изменения', filters:{ eventTypes:[...ALL_EVENT_TYPES], sources:[...ALL_SOURCES], services:[], departments:[], assignees:[] }},
+  { id:'critical', name:'Критичные', filters:{ eventTypes:['emergency'], sources:[...ALL_SOURCES], services:[], departments:[], assignees:[] }},
+  { id:'infra', name:'Инфраструктура', filters:{ eventTypes:['emergency','normal','standard','maintenance','freeze'], sources:[...ALL_SOURCES], services:[], departments:['Отдел инфраструктуры'], assignees:[] }},
+  { id:'jira', name:'Только Jira', filters:{ eventTypes:['jira'], sources:['jira'], services:[], departments:[], assignees:[] }},
+];
+
+// ===================================================================
+// UTILITY FUNCTIONS
+// ===================================================================
+
+function sameDay(a, b) { return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function dayStart(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function dayEnd(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999); }
+
+function detectConflicts(events) {
+  const conflicts = new Map();
+  for (let i = 0; i < events.length; i++) {
+    for (let j = i + 1; j < events.length; j++) {
+      const a = events[i], b = events[j];
+      if (a.serviceName === b.serviceName && a.startDate < b.endDate && b.startDate < a.endDate) {
+        if (!conflicts.has(a.id)) conflicts.set(a.id, []);
+        if (!conflicts.has(b.id)) conflicts.set(b.id, []);
+        conflicts.get(a.id).push(b.id);
+        conflicts.get(b.id).push(a.id);
+      }
+    }
+  }
+  return conflicts;
+}
+
+function getEventsForDate(events, date) {
+  const ds = dayStart(date), de = dayEnd(date);
+  return events.filter(e => e.startDate <= de && e.endDate >= ds);
+}
+
+function getMonthGrid(year, month) {
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  let startDow = first.getDay() - 1;
+  if (startDow < 0) startDow = 6;
+  const weeks = [];
+  let week = [];
+  for (let i = 0; i < startDow; i++) week.push(null);
+  for (let day = 1; day <= last.getDate(); day++) {
+    week.push(new Date(year, month, day));
+    if (week.length === 7) { weeks.push(week); week = []; }
+  }
+  if (week.length > 0) { while (week.length < 7) week.push(null); weeks.push(week); }
+  return weeks;
+}
+
+function formatDateTimeShort(d) {
+  return d.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+function formatDateTimeFull(d) {
+  return d.toLocaleString('ru-RU', { weekday:'short', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function getDurationString(start, end) {
+  const diff = end.getTime() - start.getTime();
+  const hours = Math.floor(diff / 3600000);
+  const minutes = Math.floor((diff % 3600000) / 60000);
+  if (hours >= 24) { const days = Math.floor(hours / 24); return `${days} дн. ${hours % 24} ч.`; }
+  return `${hours} ч. ${minutes} мин.`;
+}
+
+function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+// ===================================================================
+// APPLICATION STATE
+// ===================================================================
+
+const state = {
+  viewMode: 'month',
+  currentYear: new Date().getFullYear(),
+  currentMonth: new Date().getMonth(),
+  selectedDate: new Date(),
+  customRange: { start: '', end: '' },
+  filters: {
+    eventTypes: [...ALL_EVENT_TYPES],
+    sources: [...ALL_SOURCES],
+    services: [],
+    departments: [],
+    assignees: [],
+  },
+  expandedSections: { presets:true, types:true, sources:true, services:false, departments:false, assignees:false },
+  searchQuery: '',
+  searchOpen: false,
+  modalEvent: null,
+};
+
+function getFilteredEvents() {
+  return DEMO_EVENTS.filter(e => {
+    if (!state.filters.eventTypes.includes(e.eventType)) return false;
+    if (!state.filters.sources.includes(e.source)) return false;
+    if (state.filters.services.length > 0 && !state.filters.services.includes(e.serviceName)) return false;
+    if (state.filters.departments.length > 0 && !state.filters.departments.includes(e.department)) return false;
+    if (state.filters.assignees.length > 0 && !state.filters.assignees.includes(e.assignee)) return false;
+    return true;
+  });
+}
+
+// ===================================================================
+// RENDER FUNCTIONS
+// ===================================================================
+
+function render() {
+  const filtered = getFilteredEvents();
+  const conflicts = detectConflicts(filtered);
+  renderSidebar(filtered, conflicts);
+  renderNavLabel();
+  renderView(filtered, conflicts);
+  renderBell(conflicts);
+  updateViewModeButtons();
+  updateRangeInputs();
+}
+
+function updateViewModeButtons() {
+  document.querySelectorAll('.cal-view-mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === state.viewMode);
+  });
+}
+
+function updateRangeInputs() {
+  const arrows = document.getElementById('navArrows');
+  const range = document.getElementById('rangeInputs');
+  if (state.viewMode === 'custom') {
+    arrows.style.display = 'none';
+    range.style.display = 'flex';
+    // Sync input values with state
+    const rs = document.getElementById('rangeStart');
+    const re = document.getElementById('rangeEnd');
+    if (rs && state.customRange.start) rs.value = state.customRange.start;
+    if (re && state.customRange.end) re.value = state.customRange.end;
+  } else {
+    arrows.style.display = 'flex';
+    range.style.display = 'none';
+  }
+}
+
+function renderNavLabel() {
+  const label = document.getElementById('navLabel');
+  if (state.viewMode === 'month') {
+    label.textContent = `${MONTH_NAMES[state.currentMonth]} ${state.currentYear}`;
+    label.style.minWidth = '160px';
+  } else if (state.viewMode === 'day') {
+    label.textContent = state.selectedDate.toLocaleDateString('ru-RU', { day:'numeric', month:'long', year:'numeric' });
+    label.style.minWidth = '200px';
+  }
+}
+
+function renderBell(conflicts) {
+  const btn = document.getElementById('bellBtn');
+  const badge = document.getElementById('bellBadge');
+  const count = conflicts.size;
+  if (count > 0) {
+    btn.classList.add('has-notifications');
+    badge.textContent = count;
+  } else {
+    btn.classList.remove('has-notifications');
+  }
+}
+
+// ---- SIDEBAR ----
+function renderSidebar(filtered, conflicts) {
+  const el = document.getElementById('sidebar');
+  const eventCounts = {};
+  ALL_EVENT_TYPES.forEach(t => eventCounts[t] = 0);
+  filtered.forEach(e => eventCounts[e.eventType]++);
+
+  let html = `
+    <div class="cal-sidebar-stats">
+      <div class="cal-sidebar-stats-title">Фильтры</div>
+      <div class="cal-sidebar-stats-counts">
+        <span><strong>${filtered.length}</strong> событий</span>
+        ${conflicts.size > 0 ? `<span class="conflict"><strong>${conflicts.size}</strong> конфликтов</span>` : ''}
+      </div>
+    </div>`;
+
+  // Presets
+  html += buildFilterSection('presets', 'Пресеты', DEFAULT_PRESETS.map(p =>
+    `<button class="preset-btn" data-preset="${p.id}">${escapeHtml(p.name)}</button>`
+  ).join(''));
+
+  // Event types
+  html += buildFilterSection('types', 'Тип события', ALL_EVENT_TYPES.map(t => {
+    const c = EVENT_TYPE_CONFIG[t];
+    const active = state.filters.eventTypes.includes(t);
+    return `<label class="filter-checkbox" data-toggle-type="${t}">
+      <div class="box"><div class="fill" style="background:${active ? c.color : 'transparent'}"></div></div>
+      <span class="swatch" style="background:${c.color}"></span>
+      <span class="${active ? '' : 'label-inactive'}">${c.labelRu}</span>
+      <span class="count">${eventCounts[t] || 0}</span>
+    </label>`;
+  }).join(''));
+
+  // Sources
+  html += buildFilterSection('sources', 'Источник', ALL_SOURCES.map(s => {
+    const c = SOURCE_CONFIG[s];
+    const active = state.filters.sources.includes(s);
+    return `<label class="filter-checkbox" data-toggle-source="${s}">
+      <div class="box"><div class="fill" style="background:${active ? '#1a1a1a' : 'transparent'}"></div></div>
+      <span class="source-icon">${c.icon}</span>
+      <span class="${active ? '' : 'label-inactive'}">${c.label}</span>
+    </label>`;
+  }).join(''));
+
+  // Services
+  html += buildFilterSection('services', 'Сервис / ИТ-система', DEMO_SERVICES.map(s => {
+    const active = state.filters.services.length === 0 || state.filters.services.includes(s);
+    return `<label class="filter-checkbox" data-toggle-service="${s}">
+      <div class="box-sm"><div class="fill" style="background:${active ? '#1a1a1a' : 'transparent'}"></div></div>
+      <span class="${!active ? 'label-inactive' : ''}" style="font-size:11px">${escapeHtml(s)}</span>
+    </label>`;
+  }).join(''));
+
+  // Departments
+  html += buildFilterSection('departments', 'Подразделение', DEMO_DEPARTMENTS.map(d => {
+    const active = state.filters.departments.length === 0 || state.filters.departments.includes(d);
+    return `<label class="filter-checkbox" data-toggle-dept="${d}">
+      <div class="box-sm"><div class="fill" style="background:${active ? '#1a1a1a' : 'transparent'}"></div></div>
+      <span class="${!active ? 'label-inactive' : ''}" style="font-size:11px">${escapeHtml(d)}</span>
+    </label>`;
+  }).join(''));
+
+  // Assignees
+  html += buildFilterSection('assignees', 'Ответственный', DEMO_ASSIGNEES.map(a => {
+    const active = state.filters.assignees.length === 0 || state.filters.assignees.includes(a);
+    return `<label class="filter-checkbox" data-toggle-assignee="${a}">
+      <div class="box-sm"><div class="fill" style="background:${active ? '#1a1a1a' : 'transparent'}"></div></div>
+      <span class="${!active ? 'label-inactive' : ''}" style="font-size:11px">${escapeHtml(a)}</span>
+    </label>`;
+  }).join(''));
+
+  // Legend
+  html += `<div class="filter-section" style="border-bottom:none">
+    <div class="filter-section-title" style="cursor:default">Легенда</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${ALL_EVENT_TYPES.map(t => `<div class="legend-item"><div class="legend-swatch" style="background:${EVENT_TYPE_CONFIG[t].color}"></div><span>${EVENT_TYPE_CONFIG[t].labelRu}</span></div>`).join('')}
+      <div class="legend-item" style="margin-top:4px"><div class="legend-conflict-swatch"></div><span style="color:#D50000;font-weight:500">Конфликт</span></div>
+      <div class="legend-item"><div class="legend-freeze-swatch"></div><span>Период заморозки</span></div>
+      <div class="legend-item"><div class="legend-today-swatch"></div><span>Сегодня</span></div>
+    </div>
+  </div>`;
+
+  el.innerHTML = html;
+  bindSidebarEvents();
+}
+
+function buildFilterSection(key, title, contentHtml) {
+  const expanded = state.expandedSections[key];
+  return `<div class="filter-section">
+    <button class="filter-section-title" data-section="${key}">
+      ${title}
+      <span class="toggle">${expanded ? '−' : '+'}</span>
+    </button>
+    <div class="filter-section-content ${expanded ? '' : 'collapsed'}">${contentHtml}</div>
+  </div>`;
+}
+
+function bindSidebarEvents() {
+  // Section toggles
+  document.querySelectorAll('.filter-section-title[data-section]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.section;
+      state.expandedSections[key] = !state.expandedSections[key];
+      render();
+    });
+  });
+  // Presets
+  document.querySelectorAll('.preset-btn[data-preset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = DEFAULT_PRESETS.find(p => p.id === btn.dataset.preset);
+      if (preset) { state.filters = JSON.parse(JSON.stringify(preset.filters)); render(); }
+    });
+  });
+  // Event type toggles
+  document.querySelectorAll('[data-toggle-type]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      const t = el.dataset.toggleType;
+      const idx = state.filters.eventTypes.indexOf(t);
+      if (idx >= 0) state.filters.eventTypes.splice(idx, 1); else state.filters.eventTypes.push(t);
+      render();
+    });
+  });
+  // Source toggles
+  document.querySelectorAll('[data-toggle-source]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      const s = el.dataset.toggleSource;
+      const idx = state.filters.sources.indexOf(s);
+      if (idx >= 0) state.filters.sources.splice(idx, 1); else state.filters.sources.push(s);
+      render();
+    });
+  });
+  // Service toggles
+  document.querySelectorAll('[data-toggle-service]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      const s = el.dataset.toggleService;
+      const idx = state.filters.services.indexOf(s);
+      if (idx >= 0) state.filters.services.splice(idx, 1); else state.filters.services.push(s);
+      render();
+    });
+  });
+  // Department toggles
+  document.querySelectorAll('[data-toggle-dept]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      const d = el.dataset.toggleDept;
+      const idx = state.filters.departments.indexOf(d);
+      if (idx >= 0) state.filters.departments.splice(idx, 1); else state.filters.departments.push(d);
+      render();
+    });
+  });
+  // Assignee toggles
+  document.querySelectorAll('[data-toggle-assignee]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      const a = el.dataset.toggleAssignee;
+      const idx = state.filters.assignees.indexOf(a);
+      if (idx >= 0) state.filters.assignees.splice(idx, 1); else state.filters.assignees.push(a);
+      render();
+    });
+  });
+}
+
+// ---- VIEWS ----
+function renderView(filtered, conflicts) {
+  if (state.viewMode === 'month') renderMonthView(filtered, conflicts);
+  else if (state.viewMode === 'day') renderDayView(filtered, conflicts);
+  else if (state.viewMode === 'custom') renderCustomRangeView(filtered, conflicts);
+}
+
+// ---- MONTH VIEW ----
+function renderMonthView(events, conflicts) {
+  const el = document.getElementById('calView');
+  const weeks = getMonthGrid(state.currentYear, state.currentMonth);
+  const today = new Date();
+  const EVENT_HEIGHT = 20, EVENT_GAP = 2, HEADER_HEIGHT = 28, MAX_ROWS = 4;
+
+  // Compute placements per week
+  const allPlacements = weeks.map(week => {
+    const placements = [];
+    const occupied = [];
+    const weekEvents = [];
+    events.forEach(event => {
+      const evStart = dayStart(event.startDate), evEnd = dayEnd(event.endDate);
+      let startCol = -1, endCol = -1;
+      for (let col = 0; col < 7; col++) {
+        const d = week[col];
+        if (!d) continue;
+        if (evStart <= dayEnd(d) && evEnd >= dayStart(d)) {
+          if (startCol === -1) startCol = col;
+          endCol = col;
+        }
+      }
+      if (startCol !== -1) weekEvents.push({ event, startCol, span: endCol - startCol + 1 });
+    });
+    weekEvents.sort((a, b) => b.span !== a.span ? b.span - a.span : a.startCol - b.startCol);
+    weekEvents.forEach(({ event, startCol, span }) => {
+      let row = 0;
+      while (true) {
+        if (!occupied[row]) occupied[row] = Array(7).fill(false);
+        let fits = true;
+        for (let c = startCol; c < startCol + span; c++) if (occupied[row][c]) { fits = false; break; }
+        if (fits) break;
+        row++;
+      }
+      if (!occupied[row]) occupied[row] = Array(7).fill(false);
+      for (let c = startCol; c < startCol + span; c++) occupied[row][c] = true;
+      placements.push({ event, startCol, span, row });
+    });
+    return placements;
+  });
+
+  let html = `<div class="month-weekday-header">
+    ${WEEKDAYS.map((d, i) => `<div class="month-weekday-cell${i >= 5 ? ' weekend' : ''}">${d}</div>`).join('')}
+  </div><div class="month-grid">`;
+
+  weeks.forEach((week, wi) => {
+    const wp = allPlacements[wi];
+    const maxRow = wp.length > 0 ? Math.max(...wp.map(p => p.row)) : -1;
+    const visibleRows = Math.min(maxRow + 1, MAX_ROWS);
+    const cellH = Math.max(HEADER_HEIGHT + visibleRows * (EVENT_HEIGHT + EVENT_GAP) + 16, 120);
+
+    html += `<div class="month-week" style="min-height:${cellH}px">`;
+    // Day cells
+    week.forEach((date, ci) => {
+      const hasFreeze = date ? events.some(e => e.eventType === 'freeze' && e.startDate <= dayEnd(date) && e.endDate >= dayStart(date)) : false;
+      let cls = 'month-day-cell';
+      if (!date) cls += ' empty';
+      else {
+        if (ci >= 5) cls += ' weekend';
+        if (sameDay(date, today)) cls += ' today';
+      }
+      html += `<div class="${cls}" style="min-height:${cellH}px" ${date ? `data-day-click="${date.toISOString()}"` : ''}>`;
+      if (hasFreeze) html += '<div class="freeze-overlay"></div>';
+      if (date) {
+        html += `<div class="month-day-number">`;
+        if (sameDay(date, today)) html += `<span class="today-badge">${date.getDate()}</span>`;
+        else html += date.getDate();
+        html += `</div>`;
+      }
+      html += `</div>`;
+    });
+
+    // Event bars overlay
+    html += `<div class="month-events-layer" style="top:${HEADER_HEIGHT}px">`;
+    wp.filter(p => p.row < MAX_ROWS).forEach(p => {
+      const cfg = EVENT_TYPE_CONFIG[p.event.eventType];
+      const hasConflict = conflicts.has(p.event.id);
+      const srcIcon = SOURCE_CONFIG[p.event.source].icon;
+      const risk = RISK_CONFIG[p.event.riskLevel];
+      const left = (p.startCol / 7) * 100;
+      const width = (p.span / 7) * 100;
+      const top = p.row * (EVENT_HEIGHT + EVENT_GAP);
+      html += `<div class="month-event-bar${hasConflict ? ' conflict' : ''}"
+        style="left:calc(${left}% + 3px);width:calc(${width}% - 6px);top:${top}px;height:${EVENT_HEIGHT}px;background:${cfg.color}"
+        data-event-id="${p.event.id}"
+        data-event-click="${p.event.id}">
+        <span class="event-source-icon">${srcIcon}</span>
+        ${p.event.riskLevel === 'high' ? `<span style="font-size:8px;flex-shrink:0">${risk.icon}</span>` : ''}
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.event.title)}</span>
+      </div>`;
+    });
+    const hidden = wp.filter(p => p.row >= MAX_ROWS).length;
+    if (hidden > 0) {
+      html += `<div class="month-more-indicator" style="top:${MAX_ROWS * (EVENT_HEIGHT + EVENT_GAP)}px">+${hidden} ещё</div>`;
+    }
+    html += `</div></div>`;
+  });
+
+  html += `</div>`;
+  el.innerHTML = html;
+  bindMonthEvents(events, conflicts);
+}
+
+function bindMonthEvents(events, conflicts) {
+  // Day click → switch to day view
+  document.querySelectorAll('[data-day-click]').forEach(el => {
+    el.addEventListener('click', e => {
+      if (e.target.closest('[data-event-click]')) return;
+      state.selectedDate = new Date(el.dataset.dayClick);
+      state.viewMode = 'day';
+      render();
+    });
+  });
+  // Event click → open modal
+  document.querySelectorAll('[data-event-click]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const ev = DEMO_EVENTS.find(ev => ev.id === el.dataset.eventClick);
+      if (ev) openModal(ev, conflicts);
+    });
+  });
+  // Tooltip on hover
+  document.querySelectorAll('[data-event-id]').forEach(el => {
+    el.addEventListener('mouseenter', e => {
+      const ev = DEMO_EVENTS.find(ev => ev.id === el.dataset.eventId);
+      if (ev) showTooltip(ev, e.clientX, e.clientY, conflicts);
+    });
+    el.addEventListener('mousemove', e => moveTooltip(e.clientX, e.clientY));
+    el.addEventListener('mouseleave', () => hideTooltip());
+  });
+}
+
+// ---- DAY VIEW ----
+function renderDayView(events, conflicts) {
+  const el = document.getElementById('calView');
+  const date = state.selectedDate;
+  const dayEvents = getEventsForDate(events, date);
+  const HOUR_HEIGHT = 60;
+
+  const dateStr = date.toLocaleDateString('ru-RU', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  // Compute layouts
+  const dayStartTime = dayStart(date), dayEndTime = dayEnd(date);
+  const sorted = [...dayEvents].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  const positions = sorted.map(event => {
+    const es = event.startDate < dayStartTime ? dayStartTime : event.startDate;
+    const ee = event.endDate > dayEndTime ? dayEndTime : event.endDate;
+    const sm = es.getHours() * 60 + es.getMinutes();
+    const em = ee.getHours() * 60 + ee.getMinutes();
+    const dur = Math.max(em - sm, 30);
+    return { event, top: (sm / 60) * HOUR_HEIGHT, height: Math.max((dur / 60) * HOUR_HEIGHT, 30), sm, em: sm + dur };
+  });
+
+  const columns = [];
+  positions.forEach(pos => {
+    let placed = false;
+    for (let col = 0; col < columns.length; col++) {
+      if (columns[col][columns[col].length - 1].em <= pos.sm) { columns[col].push(pos); placed = true; break; }
+    }
+    if (!placed) columns.push([pos]);
+  });
+
+  const totalCols = columns.length || 1;
+  const layouts = [];
+  columns.forEach((col, ci) => col.forEach(pos => layouts.push({ ...pos, col: ci, totalCols })));
+
+  let html = `<div class="day-header"><h2 style="text-transform:capitalize">${dateStr}</h2><div class="count">${dayEvents.length} событий</div></div>`;
+  html += `<div class="day-timeline" style="height:${24 * HOUR_HEIGHT}px">`;
+
+  // Hour labels
+  html += `<div class="day-hours" style="height:${24 * HOUR_HEIGHT}px">`;
+  for (let h = 0; h < 24; h++) {
+    html += `<div class="day-hour-label" style="top:${h * HOUR_HEIGHT}px;height:${HOUR_HEIGHT}px">${String(h).padStart(2, '0')}:00</div>`;
+  }
+  html += `</div>`;
+
+  // Events area
+  html += `<div class="day-events-area" style="height:${24 * HOUR_HEIGHT}px">`;
+  for (let h = 0; h < 24; h++) {
+    html += `<div class="day-hour-line" style="top:${h * HOUR_HEIGHT}px;height:${HOUR_HEIGHT}px"></div>`;
+    html += `<div class="day-half-hour-line" style="top:${h * HOUR_HEIGHT + HOUR_HEIGHT / 2}px"></div>`;
+  }
+
+  // Current time
+  const now = new Date();
+  if (sameDay(now, date)) {
+    const mins = now.getHours() * 60 + now.getMinutes();
+    const top = (mins / 60) * HOUR_HEIGHT;
+    html += `<div class="day-current-time" style="top:${top}px"><div class="day-current-time-dot"></div><div class="day-current-time-line"></div></div>`;
+  }
+
+  // Event blocks
+  layouts.forEach(l => {
+    const cfg = EVENT_TYPE_CONFIG[l.event.eventType];
+    const hasConflict = conflicts.has(l.event.id);
+    const srcIcon = SOURCE_CONFIG[l.event.source].icon;
+    const risk = RISK_CONFIG[l.event.riskLevel];
+    const colW = 100 / l.totalCols;
+    const left = l.col * colW;
+    html += `<div class="day-event-block${hasConflict ? ' conflict' : ''}"
+      style="top:${l.top}px;height:${l.height}px;left:calc(${left}% + 2px);width:calc(${colW}% - 4px);background:${cfg.color}"
+      data-event-id="${l.event.id}" data-event-click="${l.event.id}">
+      <div class="day-event-content">
+        <div class="day-event-title">
+          <span class="event-source-icon">${srcIcon}</span>
+          ${l.event.riskLevel === 'high' ? `<span style="font-size:9px">${risk.icon}</span>` : ''}
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.event.title)}</span>
+        </div>
+        ${l.height > 40 ? `<div class="day-event-meta">${escapeHtml(l.event.serviceName)} · ${escapeHtml(l.event.assignee)}</div>` : ''}
+        ${l.height > 60 ? `<div class="day-event-time">${l.event.startDate.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})} — ${l.event.endDate.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+      </div>
+    </div>`;
+  });
+
+  html += `</div></div>`;
+  el.innerHTML = html;
+
+  // Bind events
+  document.querySelectorAll('#calView [data-event-click]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const ev = DEMO_EVENTS.find(ev => ev.id === el.dataset.eventClick);
+      if (ev) openModal(ev, conflicts);
+    });
+  });
+  document.querySelectorAll('#calView [data-event-id]').forEach(el => {
+    el.addEventListener('mouseenter', e => {
+      const ev = DEMO_EVENTS.find(ev => ev.id === el.dataset.eventId);
+      if (ev) showTooltip(ev, e.clientX, e.clientY, conflicts);
+    });
+    el.addEventListener('mousemove', e => moveTooltip(e.clientX, e.clientY));
+    el.addEventListener('mouseleave', () => hideTooltip());
+  });
+
+  // Scroll to 8am
+  const timeline = el.querySelector('.day-timeline');
+  if (timeline) timeline.scrollTop = 8 * HOUR_HEIGHT;
+}
+
+// ---- CUSTOM RANGE VIEW ----
+function renderCustomRangeView(events, conflicts) {
+  const el = document.getElementById('calView');
+  const startStr = state.customRange.start, endStr = state.customRange.end;
+  const startDate = startStr ? new Date(startStr + 'T00:00:00') : null;
+  const endDate = endStr ? new Date(endStr + 'T23:59:59') : null;
+  const valid = startDate && endDate && !isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && startDate <= endDate;
+
+  if (!valid) {
+    el.innerHTML = `<div class="range-empty"><div><div class="icon">📅</div><div class="title">Укажите диапазон дат</div><div class="subtitle">Используйте поля «С» и «По» в панели навигации</div></div></div>`;
+    return;
+  }
+
+  const rangeEvents = events.filter(e => e.startDate <= endDate && e.endDate >= startDate).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  const opts = { day:'numeric', month:'long', year:'numeric' };
+  const rangeStr = `${startDate.toLocaleDateString('ru-RU', opts)} — ${endDate.toLocaleDateString('ru-RU', opts)}`;
+
+  let html = `<div class="range-header"><h2>${rangeStr}</h2><div class="count">${rangeEvents.length} событий в выбранном диапазоне</div></div>`;
+  html += `<div class="range-table-header"><div>ID</div><div>Название</div><div>Период</div><div>Сервис</div><div>Ответственный</div><div>Риск</div></div>`;
+  html += `<div class="range-table-body">`;
+
+  if (rangeEvents.length === 0) {
+    html += `<div style="display:flex;align-items:center;justify-content:center;height:200px;color:#999;font-size:13px">Нет событий в выбранном диапазоне</div>`;
+  } else {
+    rangeEvents.forEach(event => {
+      const cfg = EVENT_TYPE_CONFIG[event.eventType];
+      const hasConflict = conflicts.has(event.id);
+      const risk = RISK_CONFIG[event.riskLevel];
+      const srcIcon = SOURCE_CONFIG[event.source].icon;
+      html += `<div class="range-row${hasConflict ? ' conflict-row' : ''}" data-event-click="${event.id}" data-event-id="${event.id}">
+        <div class="id-cell"><span class="event-source-icon">${srcIcon}</span><span style="overflow:hidden;text-overflow:ellipsis">${event.id}</span></div>
+        <div class="title-cell"><div class="title-bar" style="background:${cfg.color}"></div><span class="title-text">${escapeHtml(event.title)}</span>${hasConflict ? '<span class="conflict-badge">КОНФЛИКТ</span>' : ''}</div>
+        <div class="period-cell"><div>${formatDateTimeShort(event.startDate)}</div><div class="end">${formatDateTimeShort(event.endDate)}</div></div>
+        <div class="service-cell" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(event.serviceName)}</div>
+        <div class="assignee-cell" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(event.assignee)}</div>
+        <div class="risk-cell"><span style="color:${risk.color}">${risk.icon}</span><span>${risk.labelRu}</span></div>
+      </div>`;
+    });
+  }
+
+  html += `</div>`;
+  el.innerHTML = html;
+
+  // Bind events
+  document.querySelectorAll('#calView [data-event-click]').forEach(el => {
+    el.addEventListener('click', () => {
+      const ev = DEMO_EVENTS.find(ev => ev.id === el.dataset.eventClick);
+      if (ev) openModal(ev, conflicts);
+    });
+  });
+  document.querySelectorAll('#calView [data-event-id]').forEach(el => {
+    el.addEventListener('mouseenter', e => {
+      const ev = DEMO_EVENTS.find(ev => ev.id === el.dataset.eventId);
+      if (ev) showTooltip(ev, e.clientX, e.clientY, conflicts);
+    });
+    el.addEventListener('mousemove', e => moveTooltip(e.clientX, e.clientY));
+    el.addEventListener('mouseleave', () => hideTooltip());
+  });
+}
+
+// ---- TOOLTIP ----
+function showTooltip(event, x, y, conflicts) {
+  const tip = document.getElementById('tooltip');
+  const cfg = EVENT_TYPE_CONFIG[event.eventType];
+  const src = SOURCE_CONFIG[event.source];
+  const risk = RISK_CONFIG[event.riskLevel];
+  const hasConflict = conflicts.has(event.id);
+  const conflictIds = conflicts.get(event.id) || [];
+
+  let html = `<div class="cal-tooltip-header" style="background:${cfg.color}">
+    <span class="source-icon">${src.icon}</span>
+    <span>${event.id}</span>
+    <span class="type-label">${cfg.labelRu}</span>
+  </div>
+  <div class="cal-tooltip-body">
+    <div class="title">${escapeHtml(event.title)}</div>
+    <div class="cal-tooltip-grid">
+      <span class="label">Начало</span><span class="value">${formatDateTimeShort(event.startDate)}</span>
+      <span class="label">Окончание</span><span class="value">${formatDateTimeShort(event.endDate)}</span>
+      <span class="label">Сервис</span><span class="value">${escapeHtml(event.serviceName)}</span>
+      <span class="label">Ответственный</span><span class="value">${escapeHtml(event.assignee)}</span>
+      <span class="label">Подразделение</span><span class="value">${escapeHtml(event.department)}</span>
+      <span class="label">Риск</span><span class="value"><span style="color:${risk.color}">${risk.icon}</span> ${risk.labelRu}</span>
+      <span class="label">Приоритет</span><span class="value">P${event.priority}</span>
+    </div>
+    ${event.description ? `<div class="cal-tooltip-desc">${escapeHtml(event.description)}</div>` : ''}
+    ${hasConflict ? `<div class="cal-tooltip-conflict">Конфликт с: ${conflictIds.join(', ')}</div>` : ''}
+  </div>`;
+
+  tip.innerHTML = html;
+  tip.className = `cal-tooltip visible${hasConflict ? ' conflict-border' : ''}`;
+  moveTooltip(x, y);
+}
+
+function moveTooltip(x, y) {
+  const tip = document.getElementById('tooltip');
+  tip.style.left = Math.min(x + 12, window.innerWidth - 340) + 'px';
+  tip.style.top = Math.min(y + 12, window.innerHeight - 300) + 'px';
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').className = 'cal-tooltip';
+}
+
+// ---- MODAL ----
+let currentConflicts = new Map();
+
+function openModal(event, conflicts) {
+  currentConflicts = conflicts;
+  state.modalEvent = event;
+  renderModal(event, conflicts);
+  document.getElementById('modalOverlay').classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('visible');
+  document.body.style.overflow = '';
+  state.modalEvent = null;
+}
+
+function renderModal(event, conflicts) {
+  const modal = document.getElementById('modal');
+  const cfg = EVENT_TYPE_CONFIG[event.eventType];
+  const src = SOURCE_CONFIG[event.source];
+  const risk = RISK_CONFIG[event.riskLevel];
+  const hasConflict = conflicts.has(event.id);
+  const conflictIds = conflicts.get(event.id) || [];
+  const conflictingEvents = conflictIds.map(id => DEMO_EVENTS.find(e => e.id === id)).filter(Boolean);
+
+  let html = `<div class="cal-modal-header" style="background:${cfg.color}">
+    <span class="event-source-icon-lg">${src.icon}</span>
+    <div class="cal-modal-header-info">
+      <div class="cal-modal-header-title">${escapeHtml(event.title)}</div>
+      <div class="cal-modal-header-meta"><span>${event.id}</span><span>·</span><span>${cfg.labelRu}</span><span>·</span><span>${src.label}</span></div>
+    </div>
+    <button class="cal-modal-close" id="modalClose">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>`;
+
+  if (hasConflict) {
+    html += `<div class="cal-modal-conflict-banner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D50000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span>Обнаружен конфликт расписания</span>
+    </div>`;
+  }
+
+  html += `<div class="cal-modal-body">
+    <div class="cal-modal-info-grid">
+      <div class="cal-modal-info-card"><div class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>Начало</span></div><div class="card-value">${formatDateTimeFull(event.startDate)}</div></div>
+      <div class="cal-modal-info-card"><div class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>Окончание</span></div><div class="card-value">${formatDateTimeFull(event.endDate)}</div></div>
+      <div class="cal-modal-info-card"><div class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>Длительность</span></div><div class="card-value">${getDurationString(event.startDate, event.endDate)}</div></div>
+      <div class="cal-modal-info-card"><div class="card-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>Уровень риска</span></div><div class="card-value"><span style="color:${risk.color};font-size:16px">${risk.icon}</span> ${risk.labelRu}</div></div>
+    </div>
+    <div class="cal-modal-details">
+      <div class="cal-modal-details-title">Детали</div>
+      <div class="cal-modal-detail-row"><div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></div><div><div class="detail-label">Сервис / ИТ-система</div><div class="detail-value">${escapeHtml(event.serviceName)}</div></div></div>
+      <div class="cal-modal-detail-row"><div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div><div class="detail-label">Ответственный</div><div class="detail-value">${escapeHtml(event.assignee)}</div></div></div>
+      <div class="cal-modal-detail-row"><div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/></svg></div><div><div class="detail-label">Подразделение</div><div class="detail-value">${escapeHtml(event.department)}</div></div></div>
+      <div class="cal-modal-detail-row"><div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg></div><div><div class="detail-label">Приоритет</div><div class="detail-value">P${event.priority}</div></div></div>
+    </div>`;
+
+  if (event.description) {
+    html += `<div class="cal-modal-description"><div class="desc-title">Описание</div><div class="desc-text">${escapeHtml(event.description)}</div></div>`;
+  }
+
+  if (hasConflict && conflictingEvents.length > 0) {
+    html += `<div class="cal-modal-conflicts">
+      <div class="conflicts-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D50000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>Конфликтующие изменения (${conflictingEvents.length})</span>
+      </div>`;
+    conflictingEvents.forEach(ce => {
+      const ceCfg = EVENT_TYPE_CONFIG[ce.eventType];
+      const ceSrc = SOURCE_CONFIG[ce.source];
+      html += `<button class="cal-modal-conflict-item" data-navigate-event="${ce.id}">
+        <div class="cal-modal-conflict-item-row">
+          <div class="ci-bar" style="background:${ceCfg.color}"></div>
+          <span class="ci-source">${ceSrc.icon}</span>
+          <span class="ci-id">${ce.id}</span>
+          <span class="ci-title">${escapeHtml(ce.title)}</span>
+        </div>
+        <div class="cal-modal-conflict-item-meta">
+          <span>${escapeHtml(ce.serviceName)}</span><span>·</span>
+          <span>${escapeHtml(ce.assignee)}</span><span>·</span>
+          <span>${formatDateTimeShort(ce.startDate)} — ${formatDateTimeShort(ce.endDate)}</span>
+        </div>
+      </button>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+
+  // Footer
+  html += `<div class="cal-modal-footer">
+    <div class="source-info">Источник: <strong>${src.label}</strong></div>
+    <div class="actions">
+      <button class="btn-primary" id="modalOpenSource">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Открыть в ${src.label}
+      </button>
+      <button class="btn-secondary" id="modalCloseBtn">Закрыть</button>
+    </div>
+  </div>`;
+
+  modal.innerHTML = html;
+
+  // Bind modal events
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+  document.getElementById('modalOpenSource').addEventListener('click', () => {
+    alert('Переход в исходную систему (демо)');
+  });
+  document.querySelectorAll('[data-navigate-event]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ev = DEMO_EVENTS.find(e => e.id === btn.dataset.navigateEvent);
+      if (ev) renderModal(ev, currentConflicts);
+    });
+  });
+}
+
+// ===================================================================
+// EVENT BINDINGS
+// ===================================================================
+
+// View mode buttons
+document.querySelectorAll('.cal-view-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.viewMode = btn.dataset.mode;
+    render();
+  });
+});
+
+// Navigation
+document.getElementById('navPrev').addEventListener('click', () => {
+  if (state.viewMode === 'month') {
+    if (state.currentMonth === 0) { state.currentMonth = 11; state.currentYear--; }
+    else state.currentMonth--;
+  } else if (state.viewMode === 'day') {
+    state.selectedDate = new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth(), state.selectedDate.getDate() - 1);
+  }
+  render();
+});
+
+document.getElementById('navNext').addEventListener('click', () => {
+  if (state.viewMode === 'month') {
+    if (state.currentMonth === 11) { state.currentMonth = 0; state.currentYear++; }
+    else state.currentMonth++;
+  } else if (state.viewMode === 'day') {
+    state.selectedDate = new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth(), state.selectedDate.getDate() + 1);
+  }
+  render();
+});
+
+document.getElementById('navToday').addEventListener('click', () => {
+  const today = new Date();
+  state.currentYear = today.getFullYear();
+  state.currentMonth = today.getMonth();
+  state.selectedDate = today;
+  render();
+});
+
+// Custom range
+['change','input'].forEach(evt => {
+  document.getElementById('rangeStart').addEventListener(evt, e => {
+    state.customRange.start = e.target.value;
+    if (state.viewMode === 'custom') render();
+  });
+  document.getElementById('rangeEnd').addEventListener(evt, e => {
+    state.customRange.end = e.target.value;
+    if (state.viewMode === 'custom') render();
+  });
+});
+
+// Search
+document.getElementById('searchToggle').addEventListener('click', () => {
+  state.searchOpen = !state.searchOpen;
+  const wrap = document.getElementById('searchWrap');
+  const input = document.getElementById('searchInput');
+  const dropdown = document.getElementById('searchDropdown');
+  if (state.searchOpen) {
+    wrap.classList.remove('closed');
+    wrap.classList.add('open');
+    setTimeout(() => input.focus(), 200);
+  } else {
+    wrap.classList.remove('open');
+    wrap.classList.add('closed');
+    input.value = '';
+    state.searchQuery = '';
+    dropdown.classList.remove('visible');
+  }
+});
+
+document.getElementById('searchInput').addEventListener('input', e => {
+  state.searchQuery = e.target.value;
+  const dropdown = document.getElementById('searchDropdown');
+  if (state.searchQuery.length < 2) { dropdown.classList.remove('visible'); return; }
+  const q = state.searchQuery.toLowerCase();
+  const results = DEMO_EVENTS.filter(ev =>
+    ev.id.toLowerCase().includes(q) || ev.title.toLowerCase().includes(q) ||
+    ev.assignee.toLowerCase().includes(q) || ev.serviceName.toLowerCase().includes(q)
+  ).slice(0, 10);
+
+  if (results.length === 0) {
+    dropdown.innerHTML = `<div class="cal-search-empty">Ничего не найдено по запросу «${escapeHtml(state.searchQuery)}»</div>`;
+  } else {
+    let html = `<div class="cal-search-dropdown-header">Найдено: ${results.length}</div>`;
+    results.forEach(ev => {
+      const cfg = EVENT_TYPE_CONFIG[ev.eventType];
+      const src = SOURCE_CONFIG[ev.source];
+      html += `<button class="cal-search-result" data-search-result="${ev.id}">
+        <div class="cal-search-result-row">
+          <div style="width:6px;align-self:stretch;background:${cfg.color};flex-shrink:0"></div>
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;background:#f0f0f0;border:1px solid #ccc;font-size:7px;font-weight:700;flex-shrink:0">${src.icon}</span>
+          <span style="font-size:10px;font-family:monospace;font-weight:700;color:#888;flex-shrink:0">${ev.id}</span>
+          <span style="font-size:12px;font-weight:500;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escapeHtml(ev.title)}</span>
+        </div>
+        <div class="cal-search-result-meta">
+          <span>${escapeHtml(ev.serviceName)}</span><span>·</span>
+          <span>${escapeHtml(ev.assignee)}</span><span>·</span>
+          <span>${cfg.labelRu}</span>
+        </div>
+      </button>`;
+    });
+    dropdown.innerHTML = html;
+  }
+  dropdown.classList.add('visible');
+
+  // Bind result clicks
+  dropdown.querySelectorAll('[data-search-result]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ev = DEMO_EVENTS.find(e => e.id === btn.dataset.searchResult);
+      if (ev) {
+        const filtered = getFilteredEvents();
+        const conflicts = detectConflicts(filtered);
+        openModal(ev, conflicts);
+      }
+      dropdown.classList.remove('visible');
+      document.getElementById('searchWrap').classList.remove('open');
+      document.getElementById('searchWrap').classList.add('closed');
+      document.getElementById('searchInput').value = '';
+      state.searchQuery = '';
+      state.searchOpen = false;
+    });
+  });
+});
+
+document.getElementById('searchInput').addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.getElementById('searchToggle').click();
+  }
+});
+
+// Modal backdrop close
+document.getElementById('modalBackdrop').addEventListener('click', closeModal);
+
+// Escape key for modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && state.modalEvent) closeModal();
+});
+
+// Close search dropdown on outside click
+document.addEventListener('mousedown', e => {
+  const wrap = document.getElementById('searchWrap');
+  const dropdown = document.getElementById('searchDropdown');
+  if (!wrap.contains(e.target) && !dropdown.contains(e.target)) {
+    dropdown.classList.remove('visible');
+  }
+});
+
+// ===================================================================
+// INITIAL RENDER
+// ===================================================================
+render();
