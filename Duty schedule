@@ -1,2292 +1,1012 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Интеллектуальный график дежурств S1</title>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-    <style>
-      :root {
-        --ds-primary: #1a73e8;
-        --ds-primary-hover: #1557b0;
-        --ds-bg: #f5f6fa;
-        --ds-white: #ffffff;
-        --ds-border: #d0d5dd;
-        --ds-text: #1d2939;
-        --ds-text-light: #667085;
-        --ds-shift-d: #fff9c4;
-        --ds-shift-n: #c8e6ff;
-        --ds-shift-dn-d: #fff9c4;
-        --ds-shift-dn-n: #c8e6ff;
-        --ds-today: rgba(26, 115, 232, 0.08);
-        --ds-today-header: rgba(26, 115, 232, 0.18);
-        --ds-weekend: #fce4ec;
-        --ds-weekend-text: #c62828;
-        --ds-hole: #ff9800;
-        --ds-section-bg: #e8eaf6;
-        --ds-approved: #4caf50;
-        --ds-draft: #ff9800;
-        --ds-focus: #ffe0e6;
-        --ds-frozen-w: 780px;
-        --ds-row-h: 36px;
-        --ds-hdr-h: 52px;
-        --ds-sec-h: 34px;
-        --ds-cell-w: 42px;
-      }
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-          'Helvetica Neue', Arial, sans-serif;
-        background: var(--ds-bg);
-        color: var(--ds-text);
-        font-size: 13px;
-        line-height: 1.4;
-        overflow: hidden;
-      }
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Интеллектуальный график дежурств S1</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --ds-primary: #1a73e8; --ds-primary-hover: #1557b0;
+  --ds-bg: #f5f6fa; --ds-white: #ffffff; --ds-border: #d0d5dd;
+  --ds-text: #1d2939; --ds-text-light: #667085;
+  --ds-shift-d: #fff9c4; --ds-shift-n: #c8e6ff; --ds-shift-dn-d: #fff9c4; --ds-shift-dn-n: #c8e6ff;
+  --ds-today: rgba(26,115,232,0.08); --ds-today-header: rgba(26,115,232,0.18);
+  --ds-weekend: #fce4ec; --ds-weekend-text: #c62828;
+  --ds-hole: #ff9800; --ds-section-bg: #e8eaf6;
+  --ds-approved: #4caf50; --ds-draft: #ff9800;
+  --ds-focus: #ffe0e6;
+  --ds-frozen-w: 780px; --ds-row-h: 36px; --ds-hdr-h: 52px; --ds-sec-h: 34px; --ds-cell-w: 42px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; background:var(--ds-bg); color:var(--ds-text); font-size:13px; line-height:1.4; overflow:hidden; }
 
-      .ds-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 10px 16px;
-        background: var(--ds-white);
-        border-bottom: 1px solid var(--ds-border);
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-        flex-wrap: wrap;
-      }
-      .ds-toolbar h1 {
-        font-size: 16px;
-        font-weight: 600;
-        margin-right: 16px;
-        white-space: nowrap;
-      }
-      .ds-toolbar select,
-      .ds-toolbar input[type='month'] {
-        padding: 6px 10px;
-        border: 1px solid var(--ds-border);
-        border-radius: 6px;
-        font-size: 13px;
-        background: var(--ds-white);
-        cursor: pointer;
-      }
-      .ds-toolbar .ds-spacer {
-        flex: 1;
-      }
+.ds-toolbar { display:flex; align-items:center; gap:12px; padding:10px 16px; background:var(--ds-white); border-bottom:1px solid var(--ds-border); position:sticky; top:0; z-index:1000; flex-wrap:wrap; }
+.ds-toolbar h1 { font-size:16px; font-weight:600; margin-right:16px; white-space:nowrap; }
+.ds-toolbar select,.ds-toolbar input[type="month"] { padding:6px 10px; border:1px solid var(--ds-border); border-radius:6px; font-size:13px; background:var(--ds-white); cursor:pointer; }
+.ds-toolbar .ds-spacer { flex:1; }
 
-      .ds-btn {
-        padding: 7px 14px;
-        border: none;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.15s;
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        white-space: nowrap;
-      }
-      .ds-btn-primary {
-        background: var(--ds-primary);
-        color: #fff;
-      }
-      .ds-btn-primary:hover {
-        background: var(--ds-primary-hover);
-      }
-      .ds-btn-success {
-        background: var(--ds-approved);
-        color: #fff;
-      }
-      .ds-btn-success:hover {
-        background: #388e3c;
-      }
-      .ds-btn-warning {
-        background: var(--ds-draft);
-        color: #fff;
-      }
-      .ds-btn-warning:hover {
-        background: #f57c00;
-      }
-      .ds-btn-outline {
-        background: var(--ds-white);
-        color: var(--ds-text);
-        border: 1px solid var(--ds-border);
-      }
-      .ds-btn-outline:hover {
-        background: #f0f1f3;
-      }
-      .ds-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
+.ds-btn { padding:7px 14px; border:none; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer; transition:all .15s; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+.ds-btn-primary { background:var(--ds-primary); color:#fff; } .ds-btn-primary:hover { background:var(--ds-primary-hover); }
+.ds-btn-success { background:var(--ds-approved); color:#fff; } .ds-btn-success:hover { background:#388e3c; }
+.ds-btn-warning { background:var(--ds-draft); color:#fff; } .ds-btn-warning:hover { background:#f57c00; }
+.ds-btn-outline { background:var(--ds-white); color:var(--ds-text); border:1px solid var(--ds-border); } .ds-btn-outline:hover { background:#f0f1f3; }
+.ds-btn:disabled { opacity:.5; cursor:not-allowed; }
 
-      .ds-role-badge {
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-      }
-      .ds-role-badge.manager {
-        background: #e8f5e9;
-        color: #2e7d32;
-      }
-      .ds-role-badge.specialist {
-        background: #e3f2fd;
-        color: #1565c0;
-      }
-      .ds-status-indicator {
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 600;
-      }
-      .ds-status-indicator.approved {
-        background: #e8f5e9;
-        color: #2e7d32;
-      }
-      .ds-status-indicator.draft {
-        background: #fff3e0;
-        color: #e65100;
-      }
-      .ds-status-indicator.open {
-        background: #e3f2fd;
-        color: #1565c0;
-      }
+.ds-role-badge { padding:4px 10px; border-radius:12px; font-size:11px; font-weight:600; text-transform:uppercase; }
+.ds-role-badge.manager { background:#e8f5e9; color:#2e7d32; } .ds-role-badge.specialist { background:#e3f2fd; color:#1565c0; }
+.ds-status-indicator { padding:4px 10px; border-radius:12px; font-size:11px; font-weight:600; }
+.ds-status-indicator.approved { background:#e8f5e9; color:#2e7d32; }
+.ds-status-indicator.draft { background:#fff3e0; color:#e65100; }
+.ds-status-indicator.open { background:#e3f2fd; color:#1565c0; }
 
-      .ds-grid-wrapper {
-        position: relative;
-        overflow: hidden;
-        margin: 0;
-        background: var(--ds-white);
-        height: calc(100vh - 52px);
-      }
-      .ds-frozen-left {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: var(--ds-frozen-w);
-        height: 100%;
-        overflow: hidden;
-        z-index: 10;
-        background: var(--ds-white);
-        border-right: 2px solid var(--ds-border);
-      }
-      .ds-frozen-left .ds-header-row {
-        position: sticky;
-        top: 0;
-        z-index: 12;
-        background: var(--ds-white);
-      }
-      .ds-scroll-right {
-        position: absolute;
-        top: 0;
-        left: var(--ds-frozen-w);
-        right: 0;
-        height: 100%;
-        overflow: auto;
-        z-index: 5;
-      }
-      .ds-scroll-right .ds-header-row {
-        position: sticky;
-        top: 0;
-        z-index: 8;
-        background: var(--ds-white);
-      }
+.ds-grid-wrapper { position:relative; overflow:hidden; margin:0; background:var(--ds-white); height:calc(100vh - 52px); }
+.ds-frozen-left { position:absolute; top:0; left:0; width:var(--ds-frozen-w); height:100%; overflow:hidden; z-index:10; background:var(--ds-white); border-right:2px solid var(--ds-border); }
+.ds-frozen-left .ds-header-row { position:sticky; top:0; z-index:12; background:var(--ds-white); }
+.ds-scroll-right { position:absolute; top:0; left:var(--ds-frozen-w); right:0; height:100%; overflow:auto; z-index:5; }
+.ds-scroll-right .ds-header-row { position:sticky; top:0; z-index:8; background:var(--ds-white); }
 
-      table {
-        border-collapse: collapse;
-        table-layout: fixed;
-      }
-      .ds-frozen-left table {
-        width: var(--ds-frozen-w);
-      }
-      th,
-      td {
-        border: 1px solid var(--ds-border);
-        text-align: center;
-        vertical-align: middle;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
+table { border-collapse:collapse; table-layout:fixed; }
+.ds-frozen-left table { width:var(--ds-frozen-w); }
+th, td { border:1px solid var(--ds-border); text-align:center; vertical-align:middle; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-      .ds-header-row th {
-        background: #f8f9fc;
-        font-weight: 600;
-        font-size: 12px;
-        padding: 4px 2px;
-        height: var(--ds-hdr-h);
-        position: sticky;
-        top: 0;
-        z-index: 5;
-        cursor: default;
-      }
-      .ds-header-row th .ds-day-num {
-        font-size: 14px;
-        font-weight: 700;
-        display: block;
-      }
-      .ds-header-row th .ds-day-name {
-        font-size: 10px;
-        color: var(--ds-text-light);
-        display: block;
-      }
-      .ds-header-row th.ds-weekend {
-        background: var(--ds-weekend);
-      }
-      .ds-header-row th.ds-weekend .ds-day-num,
-      .ds-header-row th.ds-weekend .ds-day-name {
-        color: var(--ds-weekend-text);
-      }
-      .ds-header-row th.ds-today-col {
-        background: var(--ds-today-header);
-      }
-      .ds-header-row th.ds-hole {
-        background: var(--ds-hole) !important;
-        color: #fff !important;
-      }
-      .ds-header-row th.ds-hole .ds-day-name {
-        color: #fff !important;
-      }
-      .ds-header-row th.ds-holiday-custom {
-        background: #ffcdd2 !important;
-      }
-      .ds-header-row th.ds-holiday-custom .ds-day-num {
-        color: #c62828 !important;
-      }
-      .ds-header-row th.ds-holiday-custom .ds-day-name {
-        color: #c62828 !important;
-      }
-      .ds-header-row th.ds-clickable-header {
-        cursor: pointer;
-      }
-      .ds-header-row th.ds-clickable-header:hover {
-        outline: 2px solid #c62828;
-        outline-offset: -2px;
-      }
+.ds-header-row th { background:#f8f9fc; font-weight:600; font-size:12px; padding:4px 2px; height:var(--ds-hdr-h); position:sticky; top:0; z-index:5; cursor:default; }
+.ds-header-row th .ds-day-num { font-size:14px; font-weight:700; display:block; }
+.ds-header-row th .ds-day-name { font-size:10px; color:var(--ds-text-light); display:block; }
+.ds-header-row th.ds-weekend { background:var(--ds-weekend); }
+.ds-header-row th.ds-weekend .ds-day-num,.ds-header-row th.ds-weekend .ds-day-name { color:var(--ds-weekend-text); }
+.ds-header-row th.ds-today-col { background:var(--ds-today-header); }
+.ds-header-row th.ds-hole { background:var(--ds-hole) !important; color:#fff !important; }
+.ds-header-row th.ds-hole .ds-day-name { color:#fff !important; }
+.ds-header-row th.ds-holiday-custom { background:#ffcdd2 !important; }
+.ds-header-row th.ds-holiday-custom .ds-day-num { color:#c62828 !important; }
+.ds-header-row th.ds-holiday-custom .ds-day-name { color:#c62828 !important; }
+.ds-header-row th.ds-clickable-header { cursor:pointer; }
+.ds-header-row th.ds-clickable-header:hover { outline:2px solid #c62828; outline-offset:-2px; }
 
-      .ds-col-dept {
-        width: 120px;
-        text-align: left;
-        padding: 0 6px;
-      }
-      .ds-col-dir {
-        width: 130px;
-        text-align: left;
-        padding: 0 6px;
-      }
-      .ds-col-pos {
-        width: 120px;
-        text-align: left;
-        padding: 0 6px;
-      }
-      .ds-col-name {
-        width: 170px;
-        text-align: left;
-        padding: 0 6px;
-        font-weight: 500;
-      }
-      .ds-col-phone {
-        width: 120px;
-        text-align: left;
-        padding: 0 6px;
-      }
-      .ds-col-total {
-        width: 60px;
-        font-weight: 700;
-        font-size: 14px;
-      }
+.ds-col-dept { width:120px; text-align:left; padding:0 6px; }
+.ds-col-dir { width:130px; text-align:left; padding:0 6px; }
+.ds-col-pos { width:120px; text-align:left; padding:0 6px; }
+.ds-col-name { width:170px; text-align:left; padding:0 6px; font-weight:500; }
+.ds-col-phone { width:120px; text-align:left; padding:0 6px; }
+.ds-col-total { width:60px; font-weight:700; font-size:14px; }
 
-      .ds-data-row td {
-        height: var(--ds-row-h);
-        padding: 2px;
-        cursor: default;
-        font-size: 12px;
-        position: relative;
-      }
-      .ds-data-row td.ds-editable {
-        cursor: pointer;
-      }
-      .ds-data-row td.ds-editable:hover {
-        outline: 2px solid var(--ds-primary);
-        outline-offset: -2px;
-      }
-      .ds-data-row td.ds-shift-d {
-        background: var(--ds-shift-d);
-        font-weight: 500;
-      }
-      .ds-data-row td.ds-shift-n {
-        background: var(--ds-shift-n);
-        font-weight: 500;
-      }
-      .ds-data-row td.ds-shift-dn {
-        background: linear-gradient(
-          135deg,
-          var(--ds-shift-dn-d) 50%,
-          var(--ds-shift-dn-n) 50%
-        );
-        font-weight: 500;
-      }
-      .ds-data-row td.ds-today-col {
-        background: var(--ds-today);
-      }
-      .ds-data-row td.ds-shift-d.ds-today-col {
-        background: linear-gradient(
-          135deg,
-          var(--ds-shift-d) 50%,
-          var(--ds-today) 50%
-        );
-      }
-      .ds-data-row td.ds-shift-n.ds-today-col {
-        background: linear-gradient(
-          135deg,
-          var(--ds-shift-n) 50%,
-          var(--ds-today) 50%
-        );
-      }
-      .ds-data-row td.ds-shift-dn.ds-today-col {
-        background: linear-gradient(
-          135deg,
-          var(--ds-shift-dn-d) 33%,
-          var(--ds-shift-dn-n) 33% 66%,
-          var(--ds-today) 66%
-        );
-      }
-      .ds-data-row td.ds-past {
-        opacity: 0.6;
-      }
-      .ds-data-row td.ds-locked {
-        cursor: not-allowed;
-      }
-      .ds-data-row td.ds-draft-cell {
-        border: 2px dashed var(--ds-draft);
-      }
-      .ds-data-row td.ds-weekend-cell {
-        background: #fafafa;
-      }
-      .ds-data-row td.ds-focus-cell {
-        background: var(--ds-focus) !important;
-        box-shadow: inset 0 0 0 2px #e91e63;
-      }
-      .ds-day-cell {
-        width: var(--ds-cell-w);
-        min-width: var(--ds-cell-w);
-        max-width: var(--ds-cell-w);
-      }
+.ds-data-row td { height:var(--ds-row-h); padding:2px; cursor:default; font-size:12px; position:relative; }
+.ds-data-row td.ds-editable { cursor:pointer; }
+.ds-data-row td.ds-editable:hover { outline:2px solid var(--ds-primary); outline-offset:-2px; }
+.ds-data-row td.ds-shift-d { background:var(--ds-shift-d); font-weight:500; }
+.ds-data-row td.ds-shift-n { background:var(--ds-shift-n); font-weight:500; }
+.ds-data-row td.ds-shift-dn { background:linear-gradient(135deg, var(--ds-shift-dn-d) 50%, var(--ds-shift-dn-n) 50%); font-weight:500; }
+.ds-data-row td.ds-today-col { background:var(--ds-today); }
+.ds-data-row td.ds-shift-d.ds-today-col { background:linear-gradient(135deg, var(--ds-shift-d) 50%, var(--ds-today) 50%); }
+.ds-data-row td.ds-shift-n.ds-today-col { background:linear-gradient(135deg, var(--ds-shift-n) 50%, var(--ds-today) 50%); }
+.ds-data-row td.ds-shift-dn.ds-today-col { background:linear-gradient(135deg, var(--ds-shift-dn-d) 33%, var(--ds-shift-dn-n) 33% 66%, var(--ds-today) 66%); }
+.ds-data-row td.ds-past { opacity:.6; }
+.ds-data-row td.ds-locked { cursor:not-allowed; }
+.ds-data-row td.ds-draft-cell { border:2px dashed var(--ds-draft); }
+.ds-data-row td.ds-weekend-cell { background:#fafafa; }
+.ds-data-row td.ds-focus-cell { background:var(--ds-focus) !important; box-shadow:inset 0 0 0 2px #e91e63; }
+.ds-day-cell { width:var(--ds-cell-w); min-width:var(--ds-cell-w); max-width:var(--ds-cell-w); }
 
-      .ds-alert-badge {
-        position: absolute;
-        top: 1px;
-        right: 1px;
-        font-size: 9px;
-        color: #d32f2f;
-        font-weight: 700;
-        cursor: help;
-        line-height: 1;
-      }
+.ds-alert-badge { position:absolute; top:1px; right:1px; font-size:9px; color:#d32f2f; font-weight:700; cursor:help; line-height:1; }
 
-      .ds-section-row td {
-        height: var(--ds-sec-h);
-        background: var(--ds-section-bg);
-        font-weight: 600;
-        font-size: 13px;
-        text-align: left;
-        padding: 0 12px;
-        color: #3949ab;
-        border-bottom: 2px solid #c5cae9;
-      }
-      .ds-section-row .ds-section-title {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .ds-section-row .ds-section-mode {
-        font-weight: 400;
-        font-size: 11px;
-        color: var(--ds-text-light);
-        margin-left: 8px;
-      }
-      .ds-section-row .ds-unlock-btn {
-        margin-left: auto;
-        padding: 2px 8px;
-        font-size: 11px;
-        border-radius: 4px;
-        background: #fff;
-        border: 1px solid var(--ds-border);
-        cursor: pointer;
-        color: var(--ds-text);
-      }
-      .ds-section-row .ds-unlock-btn:hover {
-        background: #f0f1f3;
-      }
+.ds-section-row td { height:var(--ds-sec-h); background:var(--ds-section-bg); font-weight:600; font-size:13px; text-align:left; padding:0 12px; color:#3949ab; border-bottom:2px solid #c5cae9; }
+.ds-section-row .ds-section-title { display:flex; align-items:center; gap:8px; }
+.ds-section-row .ds-section-mode { font-weight:400; font-size:11px; color:var(--ds-text-light); margin-left:8px; }
+.ds-section-row .ds-unlock-btn { margin-left:auto; padding:2px 8px; font-size:11px; border-radius:4px; background:#fff; border:1px solid var(--ds-border); cursor:pointer; color:var(--ds-text); }
+.ds-section-row .ds-unlock-btn:hover { background:#f0f1f3; }
 
-      .ds-modal-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.4);
-        z-index: 2000;
-        justify-content: center;
-        align-items: center;
-      }
-      .ds-modal-overlay.ds-active {
-        display: flex;
-      }
-      .ds-modal {
-        background: var(--ds-white);
-        border-radius: 12px;
-        padding: 24px;
-        min-width: 320px;
-        max-width: 500px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-      }
-      .ds-modal h3 {
-        margin-bottom: 16px;
-        font-size: 16px;
-      }
-      .ds-modal .ds-form-group {
-        margin-bottom: 12px;
-      }
-      .ds-modal label {
-        display: block;
-        font-size: 12px;
-        font-weight: 600;
-        margin-bottom: 4px;
-        color: var(--ds-text-light);
-      }
-      .ds-modal select,
-      .ds-modal input,
-      .ds-modal textarea {
-        width: 100%;
-        padding: 8px 10px;
-        border: 1px solid var(--ds-border);
-        border-radius: 6px;
-        font-size: 13px;
-        font-family: inherit;
-      }
-      .ds-modal textarea {
-        resize: vertical;
-        min-height: 60px;
-      }
-      .ds-modal .ds-btn-row {
-        display: flex;
-        gap: 8px;
-        justify-content: flex-end;
-        margin-top: 16px;
-      }
+.ds-modal-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.4); z-index:2000; justify-content:center; align-items:center; }
+.ds-modal-overlay.ds-active { display:flex; }
+.ds-modal { background:var(--ds-white); border-radius:12px; padding:24px; min-width:320px; max-width:500px; box-shadow:0 20px 60px rgba(0,0,0,.2); }
+.ds-modal h3 { margin-bottom:16px; font-size:16px; }
+.ds-modal .ds-form-group { margin-bottom:12px; }
+.ds-modal label { display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:var(--ds-text-light); }
+.ds-modal select,.ds-modal input,.ds-modal textarea { width:100%; padding:8px 10px; border:1px solid var(--ds-border); border-radius:6px; font-size:13px; font-family:inherit; }
+.ds-modal textarea { resize:vertical; min-height:60px; }
+.ds-modal .ds-btn-row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
 
-      .ds-panel {
-        display: none;
-        position: fixed;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        width: 520px;
-        background: var(--ds-white);
-        box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
-        z-index: 1500;
-        overflow-y: auto;
-        padding: 24px;
-      }
-      .ds-panel.ds-active {
-        display: block;
-      }
-      .ds-panel h2 {
-        font-size: 18px;
-        margin-bottom: 16px;
-      }
-      .ds-panel-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-      }
-      .ds-tab-bar {
-        display: flex;
-        gap: 0;
-        margin-bottom: 16px;
-        border-bottom: 2px solid var(--ds-border);
-      }
-      .ds-tab-btn {
-        padding: 8px 16px;
-        border: none;
-        background: none;
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-        border-bottom: 2px solid transparent;
-        margin-bottom: -2px;
-        color: var(--ds-text-light);
-      }
-      .ds-tab-btn.ds-tab-active {
-        color: var(--ds-primary);
-        border-bottom-color: var(--ds-primary);
-      }
-      .ds-tab-btn:hover {
-        color: var(--ds-text);
-      }
+.ds-panel { display:none; position:fixed; top:0; right:0; bottom:0; width:520px; background:var(--ds-white); box-shadow:-4px 0 20px rgba(0,0,0,.1); z-index:1500; overflow-y:auto; padding:24px; }
+.ds-panel.ds-active { display:block; }
+.ds-panel h2 { font-size:18px; margin-bottom:16px; }
+.ds-panel-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+.ds-tab-bar { display:flex; gap:0; margin-bottom:16px; border-bottom:2px solid var(--ds-border); }
+.ds-tab-btn { padding:8px 16px; border:none; background:none; font-size:13px; font-weight:500; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; color:var(--ds-text-light); }
+.ds-tab-btn.ds-tab-active { color:var(--ds-primary); border-bottom-color:var(--ds-primary); }
+.ds-tab-btn:hover { color:var(--ds-text); }
 
-      .ds-setting-card {
-        background: #f8f9fc;
-        border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 12px;
-      }
-      .ds-setting-card h4 {
-        margin-bottom: 10px;
-        color: #3949ab;
-      }
-      .ds-setting-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 8px;
-        font-size: 13px;
-      }
-      .ds-setting-row label {
-        margin-bottom: 0;
-      }
-      .ds-toggle-switch {
-        position: relative;
-        width: 40px;
-        height: 22px;
-      }
-      .ds-toggle-switch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-      }
-      .ds-toggle-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: #ccc;
-        border-radius: 22px;
-        transition: 0.3s;
-      }
-      .ds-toggle-slider:before {
-        content: '';
-        position: absolute;
-        height: 16px;
-        width: 16px;
-        left: 3px;
-        bottom: 3px;
-        background: white;
-        border-radius: 50%;
-        transition: 0.3s;
-      }
-      .ds-toggle-switch input:checked + .ds-toggle-slider {
-        background: var(--ds-primary);
-      }
-      .ds-toggle-switch input:checked + .ds-toggle-slider:before {
-        transform: translateX(18px);
-      }
+.ds-setting-card { background:#f8f9fc; border-radius:8px; padding:16px; margin-bottom:12px; }
+.ds-setting-card h4 { margin-bottom:10px; color:#3949ab; }
+.ds-setting-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:13px; }
+.ds-setting-row label { margin-bottom:0; }
+.ds-toggle-switch { position:relative; width:40px; height:22px; }
+.ds-toggle-switch input { opacity:0; width:0; height:0; }
+.ds-toggle-slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#ccc; border-radius:22px; transition:.3s; }
+.ds-toggle-slider:before { content:''; position:absolute; height:16px; width:16px; left:3px; bottom:3px; background:white; border-radius:50%; transition:.3s; }
+.ds-toggle-switch input:checked+.ds-toggle-slider { background:var(--ds-primary); }
+.ds-toggle-switch input:checked+.ds-toggle-slider:before { transform:translateX(18px); }
 
-      .ds-audit-table {
-        width: 100%;
-        font-size: 12px;
-        border-collapse: collapse;
-      }
-      .ds-audit-table th {
-        background: #f8f9fc;
-        padding: 8px 6px;
-        text-align: left;
-        border-bottom: 1px solid var(--ds-border);
-      }
-      .ds-audit-table td {
-        padding: 6px;
-        border-bottom: 1px solid #eee;
-        text-align: left;
-      }
+.ds-audit-table { width:100%; font-size:12px; border-collapse:collapse; }
+.ds-audit-table th { background:#f8f9fc; padding:8px 6px; text-align:left; border-bottom:1px solid var(--ds-border); }
+.ds-audit-table td { padding:6px; border-bottom:1px solid #eee; text-align:left; }
 
-      .ds-toast-container {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        z-index: 3000;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .ds-toast {
-        padding: 10px 16px;
-        border-radius: 8px;
-        color: #fff;
-        font-size: 13px;
-        font-weight: 500;
-        animation: dsSlideIn 0.3s ease;
-        max-width: 350px;
-      }
-      .ds-toast.success {
-        background: #4caf50;
-      }
-      .ds-toast.error {
-        background: #f44336;
-      }
-      .ds-toast.info {
-        background: #2196f3;
-      }
-      @keyframes dsSlideIn {
-        from {
-          transform: translateX(100%);
-          opacity: 0;
-        }
-        to {
-          transform: translateX(0);
-          opacity: 1;
-        }
-      }
+.ds-toast-container { position:fixed; bottom:20px; right:20px; z-index:3000; display:flex; flex-direction:column; gap:8px; }
+.ds-toast { padding:10px 16px; border-radius:8px; color:#fff; font-size:13px; font-weight:500; animation:dsSlideIn .3s ease; max-width:350px; }
+.ds-toast.success { background:#4caf50; } .ds-toast.error { background:#f44336; } .ds-toast.info { background:#2196f3; }
+@keyframes dsSlideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
 
-      .ds-context-menu {
-        display: none;
-        position: fixed;
-        background: var(--ds-white);
-        border: 1px solid var(--ds-border);
-        border-radius: 8px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-        z-index: 2500;
-        min-width: 200px;
-        padding: 4px 0;
-      }
-      .ds-context-menu.ds-active {
-        display: block;
-      }
-      .ds-context-menu-item {
-        padding: 8px 16px;
-        cursor: pointer;
-        font-size: 13px;
-        transition: background 0.1s;
-      }
-      .ds-context-menu-item:hover {
-        background: #f0f1f3;
-      }
-      .ds-context-menu-item.danger {
-        color: #f44336;
-      }
-      .ds-context-menu-item.ds-separator {
-        border-top: 1px solid var(--ds-border);
-        margin-top: 4px;
-        padding-top: 8px;
-      }
+.ds-context-menu { display:none; position:fixed; background:var(--ds-white); border:1px solid var(--ds-border); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.12); z-index:2500; min-width:200px; padding:4px 0; }
+.ds-context-menu.ds-active { display:block; }
+.ds-context-menu-item { padding:8px 16px; cursor:pointer; font-size:13px; transition:background .1s; }
+.ds-context-menu-item:hover { background:#f0f1f3; }
+.ds-context-menu-item.danger { color:#f44336; }
+.ds-context-menu-item.ds-separator { border-top:1px solid var(--ds-border); margin-top:4px; padding-top:8px; }
 
-      .ds-tooltip {
-        position: fixed;
-        background: #333;
-        color: #fff;
-        padding: 8px 12px;
-        border-radius: 6px;
-        font-size: 11px;
-        line-height: 1.5;
-        z-index: 4000;
-        pointer-events: none;
-        max-width: 300px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      }
-    </style>
-  </head>
-  <body>
-    <div class="ds-toolbar" id="dsToolbar">
-      <h1>📋 График дежурств</h1>
-      <input type="month" id="dsMonthPicker" />
-      <select id="dsRoleSelect">
-        <option value="manager">Начальник смены</option>
-        <option value="specialist">Специалист направления</option>
-      </select>
-      <select id="dsDirectionFilter" style="display: none">
-        <option value="">— Направление —</option>
-      </select>
-      <span class="ds-role-badge manager" id="dsRoleBadge"
-        >Начальник смены</span
-      >
-      <span class="ds-status-indicator open" id="dsStatusBadge">Открыт</span>
-      <div class="ds-spacer"></div>
-      <button
-        class="ds-btn ds-btn-outline"
-        id="dsBtnCopyMonth"
-        style="display: none"
-      >
-        📄 Копировать месяц
-      </button>
-      <button
-        class="ds-btn ds-btn-warning"
-        id="dsBtnPublish"
-        style="display: none"
-      >
-        📢 Опубликовать
-      </button>
-      <button class="ds-btn ds-btn-success" id="dsBtnApprove">
-        ✅ Утвердить график
-      </button>
-      <button class="ds-btn ds-btn-outline" id="dsBtnSettings">
-        ⚙️ Настройки
-      </button>
-      <button class="ds-btn ds-btn-outline" id="dsBtnJournal">📜 Журнал</button>
-      <button class="ds-btn ds-btn-primary" id="dsBtnExport">
-        📥 Экспорт XLSX
-      </button>
+.ds-tooltip { position:fixed; background:#333; color:#fff; padding:8px 12px; border-radius:6px; font-size:11px; line-height:1.5; z-index:4000; pointer-events:none; max-width:300px; box-shadow:0 4px 12px rgba(0,0,0,.3); }
+</style>
+</head>
+<body>
+
+<div class="ds-toolbar">
+  <h1>📋 График дежурств</h1>
+  <input type="month" class="ds-month-picker" />
+  <select class="ds-role-select">
+    <option value="manager">Начальник смены</option>
+    <option value="specialist">Специалист направления</option>
+  </select>
+  <select class="ds-direction-filter" style="display: 'none'"><option value="">— Направление —</option></select>
+  <span class="ds-role-badge manager ds-role-badge-el">Начальник смены</span>
+  <span class="ds-status-indicator open ds-status-badge-el">Открыт</span>
+  <div class="ds-spacer"></div>
+  <button class="ds-btn ds-btn-outline ds-btn-copy-month" style="display: 'none'">📄 Копировать месяц</button>
+  <button class="ds-btn ds-btn-warning ds-btn-publish" style="display: 'none'">📢 Опубликовать</button>
+  <button class="ds-btn ds-btn-success ds-btn-approve">✅ Утвердить график</button>
+  <button class="ds-btn ds-btn-outline ds-btn-settings">⚙️ Настройки</button>
+  <button class="ds-btn ds-btn-outline ds-btn-journal">📜 Журнал</button>
+  <button class="ds-btn ds-btn-primary ds-btn-export">📥 Экспорт XLSX</button>
+</div>
+<div class="ds-grid-wrapper">
+  <div class="ds-frozen-left"></div>
+  <div class="ds-scroll-right"></div>
+</div>
+
+<div class="ds-panel ds-settings-panel">
+  <div class="ds-panel-header"><h2>⚙️ Настройки направлений</h2><button class="ds-btn ds-btn-outline ds-btn-close-settings">✕ Закрыть</button></div>
+  <div class="ds-settings-content"></div>
+</div>
+
+<div class="ds-panel ds-journal-panel" style="width:600px">
+  <div class="ds-panel-header"><h2>📜 Журналы</h2><button class="ds-btn ds-btn-outline ds-btn-close-journal">✕ Закрыть</button></div>
+  <div class="ds-tab-bar ds-journal-tabs">
+    <button class="ds-tab-btn ds-tab-active" data-tab="audit">Журнал изменений</button>
+    <button class="ds-tab-btn" data-tab="engagement">Журнал привлечений</button>
+  </div>
+  <div class="ds-journal-audit-content">
+    <table class="ds-audit-table"><thead><tr><th>Дата/Время</th><th>Пользователь</th><th>Сотрудник</th><th>Ред.Дата</th><th>Было</th><th>Стало</th></tr></thead><tbody class="ds-audit-body"></tbody></table>
+  </div>
+  <div class="ds-journal-engagement-content" style="display: 'none'">
+    <table class="ds-audit-table"><thead><tr><th>Дата/Время</th><th>ФИО</th><th>Направление</th><th>Основание</th><th>Эскалация</th><th>Автор</th></tr></thead><tbody class="ds-engagement-body"></tbody></table>
+  </div>
+</div>
+
+<div class="ds-modal-overlay ds-cell-modal">
+  <div class="ds-modal">
+    <h3 class="ds-modal-title">Редактирование смены</h3>
+    <div class="ds-form-group"><label>Сотрудник</label><input type="text" class="ds-modal-employee" readonly /></div>
+    <div class="ds-form-group"><label>Дата</label><input type="text" class="ds-modal-date" readonly /></div>
+    <div class="ds-form-group"><label>Тип смены</label>
+      <select class="ds-modal-shift"><option value="">— Нет смены —</option><option value="Д">Д (Дневная)</option><option value="Н">Н (Ночная)</option><option value="Д/Н">Д/Н (Суточная)</option></select>
     </div>
-    <div class="ds-grid-wrapper" id="dsGridWrapper">
-      <div class="ds-frozen-left" id="dsFrozenLeft"></div>
-      <div class="ds-scroll-right" id="dsScrollRight"></div>
-    </div>
+    <div class="ds-btn-row"><button class="ds-btn ds-btn-outline ds-btn-cancel-modal">Отмена</button><button class="ds-btn ds-btn-primary ds-btn-save-shift">Сохранить</button></div>
+  </div>
+</div>
 
-    <div class="ds-panel" id="dsSettingsPanel">
-      <div class="ds-panel-header">
-        <h2>⚙️ Настройки направлений</h2>
-        <button class="ds-btn ds-btn-outline" id="dsBtnCloseSettings">
-          ✕ Закрыть
-        </button>
-      </div>
-      <div id="dsSettingsContent"></div>
-    </div>
+<div class="ds-modal-overlay ds-engagement-modal">
+  <div class="ds-modal">
+    <h3>Внеплановое привлечение</h3>
+    <div class="ds-form-group"><label>Сотрудник</label><input type="text" class="ds-eng-employee" readonly /></div>
+    <div class="ds-form-group"><label>Дата</label><input type="text" class="ds-eng-date" readonly /></div>
+    <div class="ds-form-group"><label>Основание</label><textarea class="ds-eng-reason" placeholder="Укажите основание привлечения..."></textarea></div>
+    <div class="ds-form-group"><label>Эскалация</label><textarea class="ds-eng-escalation" placeholder="Описание эскалации (свободный текст)..."></textarea></div>
+    <div class="ds-btn-row"><button class="ds-btn ds-btn-outline ds-btn-cancel-eng">Отмена</button><button class="ds-btn ds-btn-primary ds-btn-save-eng">Сохранить</button></div>
+  </div>
+</div>
 
-    <div class="ds-panel" id="dsJournalPanel" style="width: 600px">
-      <div class="ds-panel-header">
-        <h2>📜 Журналы</h2>
-        <button class="ds-btn ds-btn-outline" id="dsBtnCloseJournal">
-          ✕ Закрыть
-        </button>
-      </div>
-      <div class="ds-tab-bar" id="dsJournalTabs">
-        <button class="ds-tab-btn ds-tab-active" data-tab="audit">
-          Журнал изменений
-        </button>
-        <button class="ds-tab-btn" data-tab="engagement">
-          Журнал привлечений
-        </button>
-      </div>
-      <div id="dsJournalAuditContent">
-        <table class="ds-audit-table">
-          <thead>
-            <tr>
-              <th>Дата/Время</th>
-              <th>Пользователь</th>
-              <th>Сотрудник</th>
-              <th>Ред.Дата</th>
-              <th>Было</th>
-              <th>Стало</th>
-            </tr>
-          </thead>
-          <tbody id="dsAuditBody"></tbody>
-        </table>
-      </div>
-      <div id="dsJournalEngagementContent" style="display: none">
-        <table class="ds-audit-table">
-          <thead>
-            <tr>
-              <th>Дата/Время</th>
-              <th>ФИО</th>
-              <th>Направление</th>
-              <th>Основание</th>
-              <th>Эскалация</th>
-              <th>Автор</th>
-            </tr>
-          </thead>
-          <tbody id="dsEngagementBody"></tbody>
-        </table>
-      </div>
-    </div>
+<div class="ds-context-menu">
+  <div class="ds-context-menu-item" data-action="set-d">Поставить «Д»</div>
+  <div class="ds-context-menu-item" data-action="set-n">Поставить «Н»</div>
+  <div class="ds-context-menu-item" data-action="set-dn">Поставить «Д/Н»</div>
+  <div class="ds-context-menu-item danger" data-action="clear">Очистить</div>
+  <div class="ds-context-menu-item ds-separator" data-action="engage">⚡ Отметить привлечение</div>
+  <div class="ds-context-menu-item danger" data-action="remove-engage">✕ Снять привлечение</div>
+</div>
 
-    <div class="ds-modal-overlay" id="dsCellModal">
-      <div class="ds-modal">
-        <h3 id="dsModalTitle">Редактирование смены</h3>
-        <div class="ds-form-group">
-          <label>Сотрудник</label
-          ><input type="text" id="dsModalEmployee" readonly />
-        </div>
-        <div class="ds-form-group">
-          <label>Дата</label><input type="text" id="dsModalDate" readonly />
-        </div>
-        <div class="ds-form-group">
-          <label>Тип смены</label>
-          <select id="dsModalShift">
-            <option value="">— Нет смены —</option>
-            <option value="Д">Д (Дневная)</option>
-            <option value="Н">Н (Ночная)</option>
-            <option value="Д/Н">Д/Н (Суточная)</option>
-          </select>
-        </div>
-        <div class="ds-btn-row">
-          <button class="ds-btn ds-btn-outline" id="dsBtnCancelModal">
-            Отмена</button
-          ><button class="ds-btn ds-btn-primary" id="dsBtnSaveShift">
-            Сохранить
-          </button>
-        </div>
-      </div>
-    </div>
+<div class="ds-toast-container"></div>
+<div class="ds-tooltip" style="display: 'none'"></div>
 
-    <div class="ds-modal-overlay" id="dsEngagementModal">
-      <div class="ds-modal">
-        <h3>Внеплановое привлечение</h3>
-        <div class="ds-form-group">
-          <label>Сотрудник</label
-          ><input type="text" id="dsEngEmployee" readonly />
-        </div>
-        <div class="ds-form-group">
-          <label>Дата</label><input type="text" id="dsEngDate" readonly />
-        </div>
-        <div class="ds-form-group">
-          <label>Основание</label
-          ><textarea
-            id="dsEngReason"
-            placeholder="Укажите основание привлечения..."
-          ></textarea>
-        </div>
-        <div class="ds-form-group">
-          <label>Эскалация</label
-          ><textarea
-            id="dsEngEscalation"
-            placeholder="Описание эскалации (свободный текст)..."
-          ></textarea>
-        </div>
-        <div class="ds-btn-row">
-          <button class="ds-btn ds-btn-outline" id="dsBtnCancelEng">
-            Отмена</button
-          ><button class="ds-btn ds-btn-primary" id="dsBtnSaveEng">
-            Сохранить
-          </button>
-        </div>
-      </div>
-    </div>
+<script>
+(function() {
+  'use strict';
 
-    <div class="ds-context-menu" id="dsContextMenu">
-      <div class="ds-context-menu-item" data-action="set-d">Поставить «Д»</div>
-      <div class="ds-context-menu-item" data-action="set-n">Поставить «Н»</div>
-      <div class="ds-context-menu-item" data-action="set-dn">
-        Поставить «Д/Н»
-      </div>
-      <div class="ds-context-menu-item danger" data-action="clear">
-        Очистить
-      </div>
-      <div class="ds-context-menu-item ds-separator" data-action="engage">
-        ⚡ Отметить привлечение
-      </div>
-      <div class="ds-context-menu-item danger" data-action="remove-engage">
-        ✕ Снять привлечение
-      </div>
-    </div>
+  const HOLIDAYS_RU = ['01-01','01-02','01-03','01-04','01-05','01-06','01-07','01-08','02-23','03-08','05-01','05-09','06-12','11-04'];
+  const DAY_NAMES = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+  const MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
-    <div class="ds-toast-container" id="dsToastContainer"></div>
-    <div class="ds-tooltip" id="dsTooltip" style="display: none"></div>
+  const DIRECTIONS = [
+    { id:'dir1', name:'Мониторинг инфраструктуры', department:'ИТ-департамент', mode:'24/7', shiftChangeTime:'09:00', countDayShift:false, weekdaysOnly:false, checkStaffing:true, approved:false, unlocked:true },
+    { id:'dir2', name:'Поддержка пользователей (1 линия)', department:'ИТ-департамент', mode:'08:00–20:00 (Пн–Пт)', shiftChangeTime:'08:00', countDayShift:true, weekdaysOnly:true, checkStaffing:true, approved:false, unlocked:true },
+    { id:'dir3', name:'Сетевая безопасность', department:'Служба безопасности', mode:'24/7', shiftChangeTime:'10:00', countDayShift:false, weekdaysOnly:false, checkStaffing:true, approved:false, unlocked:true },
+    { id:'dir4', name:'Администрирование серверов', department:'ИТ-департамент', mode:'09:00–18:00 (Пн–Пт)', shiftChangeTime:'09:00', countDayShift:true, weekdaysOnly:false, checkStaffing:false, approved:false, unlocked:true }
+  ];
 
-    <script>
-      (function () {
-        'use strict';
+  const EMPLOYEES = [
+    { id:'e1', name:'Иванов Алексей Сергеевич', position:'Инженер', phone:'+7(999)111-22-33', directionId:'dir1' },
+    { id:'e2', name:'Петрова Мария Владимировна', position:'Инженер', phone:'+7(999)222-33-44', directionId:'dir1' },
+    { id:'e3', name:'Сидоров Кирилл Леонидович', position:'Ст. инженер', phone:'+7(999)333-44-55', directionId:'dir1' },
+    { id:'e4', name:'Козлова Елена Николаевна', position:'Инженер', phone:'+7(999)444-55-66', directionId:'dir1' },
+    { id:'e5', name:'Морозов Дмитрий Александрович', position:'Специалист', phone:'+7(999)555-66-77', directionId:'dir2' },
+    { id:'e6', name:'Волкова Ирина Павловна', position:'Специалист', phone:'+7(999)666-77-88', directionId:'dir2' },
+    { id:'e7', name:'Новиков Сергей Романович', position:'Ст. специалист', phone:'+7(999)777-88-99', directionId:'dir2' },
+    { id:'e8', name:'Соколова Анна Михайловна', position:'Специалист', phone:'+7(999)888-99-00', directionId:'dir2' },
+    { id:'e9', name:'Лебедев Виктор Геннадьевич', position:'Аналитик', phone:'+7(999)999-00-11', directionId:'dir3' },
+    { id:'e10', name:'Кузнецова Ольга Дмитриевна', position:'Аналитик', phone:'+7(999)000-11-22', directionId:'dir3' },
+    { id:'e11', name:'Попов Роман Евгеньевич', position:'Ст. аналитик', phone:'+7(999)111-33-55', directionId:'dir3' },
+    { id:'e12', name:'Федоров Николай Иванович', position:'Администратор', phone:'+7(999)222-44-66', directionId:'dir4' },
+    { id:'e13', name:'Михайлова Татьяна Сергеевна', position:'Администратор', phone:'+7(999)333-55-77', directionId:'dir4' },
+    { id:'e14', name:'Егоров Андрей Викторович', position:'Ст. администратор', phone:'+7(999)444-66-88', directionId:'dir4' },
+    { id:'e15', name:'Андреева Людмила Константиновна', position:'Администратор', phone:'+7(999)555-77-99', directionId:'dir4' }
+  ];
 
-        var HOLIDAYS_RU = [
-          '01-01',
-          '01-02',
-          '01-03',
-          '01-04',
-          '01-05',
-          '01-06',
-          '01-07',
-          '01-08',
-          '02-23',
-          '03-08',
-          '05-01',
-          '05-09',
-          '06-12',
-          '11-04',
-        ];
-        var DAY_NAMES = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-        var MONTH_NAMES = [
-          'Январь',
-          'Февраль',
-          'Март',
-          'Апрель',
-          'Май',
-          'Июнь',
-          'Июль',
-          'Август',
-          'Сентябрь',
-          'Октябрь',
-          'Ноябрь',
-          'Декабрь',
-        ];
+  const state = {
+    currentMonth: null,
+    currentRole: 'manager',
+    specialistDirection: '',
+    scheduleData: {},
+    draftData: {},
+    engagementData: {},
+    engagementLog: [],
+    customHolidays: {},
+    globalApproved: false,
+    auditLog: [],
+    editingCell: null,
+    activeJournalTab: 'audit'
+  };
 
-        var DIRECTIONS = [
-          {
-            id: 'dir1',
-            name: 'Мониторинг инфраструктуры',
-            department: 'ИТ-департамент',
-            mode: '24/7',
-            shiftChangeTime: '09:00',
-            countDayShift: false,
-            weekdaysOnly: false,
-            checkStaffing: true,
-            approved: false,
-            unlocked: true,
-          },
-          {
-            id: 'dir2',
-            name: 'Поддержка пользователей (1 линия)',
-            department: 'ИТ-департамент',
-            mode: '08:00–20:00 (Пн–Пт)',
-            shiftChangeTime: '08:00',
-            countDayShift: true,
-            weekdaysOnly: true,
-            checkStaffing: true,
-            approved: false,
-            unlocked: true,
-          },
-          {
-            id: 'dir3',
-            name: 'Сетевая безопасность',
-            department: 'Служба безопасности',
-            mode: '24/7',
-            shiftChangeTime: '10:00',
-            countDayShift: false,
-            weekdaysOnly: false,
-            checkStaffing: true,
-            approved: false,
-            unlocked: true,
-          },
-          {
-            id: 'dir4',
-            name: 'Администрирование серверов',
-            department: 'ИТ-департамент',
-            mode: '09:00–18:00 (Пн–Пт)',
-            shiftChangeTime: '09:00',
-            countDayShift: true,
-            weekdaysOnly: false,
-            checkStaffing: false,
-            approved: false,
-            unlocked: true,
-          },
-        ];
+  // --- DOM references via classes ---
+  const $el = (selector) => document.querySelector(selector);
+  const $all = (selector) => document.querySelectorAll(selector);
 
-        var EMPLOYEES = [
-          {
-            id: 'e1',
-            name: 'Иванов Алексей Сергеевич',
-            position: 'Инженер',
-            phone: '+7(999)111-22-33',
-            directionId: 'dir1',
-          },
-          {
-            id: 'e2',
-            name: 'Петрова Мария Владимировна',
-            position: 'Инженер',
-            phone: '+7(999)222-33-44',
-            directionId: 'dir1',
-          },
-          {
-            id: 'e3',
-            name: 'Сидоров Кирилл Леонидович',
-            position: 'Ст. инженер',
-            phone: '+7(999)333-44-55',
-            directionId: 'dir1',
-          },
-          {
-            id: 'e4',
-            name: 'Козлова Елена Николаевна',
-            position: 'Инженер',
-            phone: '+7(999)444-55-66',
-            directionId: 'dir1',
-          },
-          {
-            id: 'e5',
-            name: 'Морозов Дмитрий Александрович',
-            position: 'Специалист',
-            phone: '+7(999)555-66-77',
-            directionId: 'dir2',
-          },
-          {
-            id: 'e6',
-            name: 'Волкова Ирина Павловна',
-            position: 'Специалист',
-            phone: '+7(999)666-77-88',
-            directionId: 'dir2',
-          },
-          {
-            id: 'e7',
-            name: 'Новиков Сергей Романович',
-            position: 'Ст. специалист',
-            phone: '+7(999)777-88-99',
-            directionId: 'dir2',
-          },
-          {
-            id: 'e8',
-            name: 'Соколова Анна Михайловна',
-            position: 'Специалист',
-            phone: '+7(999)888-99-00',
-            directionId: 'dir2',
-          },
-          {
-            id: 'e9',
-            name: 'Лебедев Виктор Геннадьевич',
-            position: 'Аналитик',
-            phone: '+7(999)999-00-11',
-            directionId: 'dir3',
-          },
-          {
-            id: 'e10',
-            name: 'Кузнецова Ольга Дмитриевна',
-            position: 'Аналитик',
-            phone: '+7(999)000-11-22',
-            directionId: 'dir3',
-          },
-          {
-            id: 'e11',
-            name: 'Попов Роман Евгеньевич',
-            position: 'Ст. аналитик',
-            phone: '+7(999)111-33-55',
-            directionId: 'dir3',
-          },
-          {
-            id: 'e12',
-            name: 'Федоров Николай Иванович',
-            position: 'Администратор',
-            phone: '+7(999)222-44-66',
-            directionId: 'dir4',
-          },
-          {
-            id: 'e13',
-            name: 'Михайлова Татьяна Сергеевна',
-            position: 'Администратор',
-            phone: '+7(999)333-55-77',
-            directionId: 'dir4',
-          },
-          {
-            id: 'e14',
-            name: 'Егоров Андрей Викторович',
-            position: 'Ст. администратор',
-            phone: '+7(999)444-66-88',
-            directionId: 'dir4',
-          },
-          {
-            id: 'e15',
-            name: 'Андреева Людмила Константиновна',
-            position: 'Администратор',
-            phone: '+7(999)555-77-99',
-            directionId: 'dir4',
-          },
-        ];
+  // --- Helpers ---
+  const fmtDate = (day) => {
+    const y = state.currentMonth.getFullYear();
+    const m = state.currentMonth.getMonth();
+    return String(day).padStart(2, '0') + '.' + String(m + 1).padStart(2, '0') + '.' + y;
+  };
 
-        var state = {
-          currentMonth: null,
-          currentRole: 'manager',
-          specialistDirection: '',
-          scheduleData: {},
-          draftData: {},
-          engagementData: {},
-          engagementLog: [],
-          customHolidays: {},
-          globalApproved: false,
-          auditLog: [],
-          editingCell: null,
-          activeJournalTab: 'audit',
-        };
+  const fmtDateTime = () => new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-        // --- Helpers ---
-        function fmtDate(day) {
-          var y = state.currentMonth.getFullYear(),
-            m = state.currentMonth.getMonth();
-          return (
-            String(day).padStart(2, '0') +
-            '.' +
-            String(m + 1).padStart(2, '0') +
-            '.' +
-            y
-          );
+  const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+
+  const isWeekend = (year, month, day) => {
+    const d = new Date(year, month, day);
+    return d.getDay() === 0 || d.getDay() === 6;
+  };
+
+  const isHoliday = (month, day) => HOLIDAYS_RU.includes(String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0'));
+
+  const isCustomHoliday = (year, month, day) => !!state.customHolidays[year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0')];
+
+  const isNonWorkingDay = (year, month, day) => isWeekend(year, month, day) || isHoliday(month, day) || isCustomHoliday(year, month, day);
+
+  // Smart Focus: determine the "operational day" for a direction based on shift change time
+  const getOperationalDay = (direction) => {
+    const now = new Date();
+    const y = state.currentMonth.getFullYear();
+    const m = state.currentMonth.getMonth();
+    if (y !== now.getFullYear() || m !== now.getMonth()) return -1;
+    const parts = direction.shiftChangeTime.split(':');
+    const hh = parseInt(parts[0]);
+    const mm = parseInt(parts[1]);
+    const shiftTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm);
+    return now < shiftTime ? now.getDate() - 1 : now.getDate();
+  };
+
+  const isPastDate = (day, direction) => {
+    const now = new Date();
+    if (state.currentMonth.getFullYear() < now.getFullYear()) return true;
+    if (state.currentMonth.getFullYear() === now.getFullYear() && state.currentMonth.getMonth() < now.getMonth()) return true;
+    if (state.currentMonth.getFullYear() === now.getFullYear() && state.currentMonth.getMonth() === now.getMonth()) {
+      return day < getOperationalDay(direction);
+    }
+    return false;
+  };
+
+  const getShift = (empId, day) => {
+    const key = empId + '_' + day;
+    if (state.currentRole === 'specialist' && state.draftData[key]) return state.draftData[key];
+    return state.scheduleData[key] || { shift: '', draft: false };
+  };
+
+  const setShift = (empId, day, shiftValue) => {
+    const key = empId + '_' + day;
+    const old = state.scheduleData[key] || { shift: '', draft: false };
+    if (state.currentRole === 'specialist') {
+      state.draftData[key] = { shift: shiftValue, draft: true };
+    } else {
+      state.scheduleData[key] = { shift: shiftValue, draft: false };
+    }
+    state.auditLog.unshift({
+      timestamp: fmtDateTime(),
+      user: state.currentRole === 'manager' ? 'Начальник смены' : 'Специалист',
+      employee: (EMPLOYEES.find((e) => e.id === empId) || {}).name || empId,
+      editDate: fmtDate(day),
+      oldValue: old.shift || '—',
+      newValue: shiftValue || '—'
+    });
+  };
+
+  const calculateTotal = (empId, direction) => {
+    const days = getDaysInMonth(state.currentMonth);
+    let t = 0;
+    for (let d = 1; d <= days; d++) {
+      const s = getShift(empId, d).shift;
+      if (s === 'Д/Н') t++;
+      else if (s === 'Н') t++;
+      else if (s === 'Д' && direction.countDayShift) t++;
+    }
+    return t;
+  };
+
+  const checkHole = (dirId, day) => {
+    const dir = DIRECTIONS.find((d) => d.id === dirId);
+    if (!dir || !dir.checkStaffing) return false;
+    const y = state.currentMonth.getFullYear();
+    const m = state.currentMonth.getMonth();
+    if (dir.weekdaysOnly && isNonWorkingDay(y, m, day)) return false;
+    const emps = EMPLOYEES.filter((e) => e.directionId === dirId);
+    return !emps.some((emp) => {
+      const s = getShift(emp.id, day).shift;
+      return s === 'Д' || s === 'Н' || s === 'Д/Н';
+    });
+  };
+
+  // Enhanced slot validation: Day slot (Д or Д/Н) max 1, Night slot (Н or Д/Н) max 1
+  const validateSlot = (dirId, day, excludeEmpId, newShift) => {
+    if (!newShift) return null;
+    const emps = EMPLOYEES.filter((e) => e.directionId === dirId && e.id !== excludeEmpId);
+    const occupiesDay = newShift === 'Д' || newShift === 'Д/Н';
+    const occupiesNight = newShift === 'Н' || newShift === 'Д/Н';
+    for (let i = 0; i < emps.length; i++) {
+      const emp = emps[i];
+      const s = getShift(emp.id, day).shift;
+      if (!s) continue;
+      const hasDaySlot = s === 'Д' || s === 'Д/Н';
+      const hasNightSlot = s === 'Н' || s === 'Д/Н';
+      if (occupiesDay && hasDaySlot) return 'Дневной слот на ' + fmtDate(day) + ' уже занят (' + emp.name + ')';
+      if (occupiesNight && hasNightSlot) return 'Ночной слот на ' + fmtDate(day) + ' уже занят (' + emp.name + ')';
+    }
+    return null;
+  };
+
+  const canEdit = (empId, day) => {
+    const emp = EMPLOYEES.find((e) => e.id === empId);
+    if (!emp) return false;
+    const dir = DIRECTIONS.find((d) => d.id === emp.directionId);
+    if (!dir) return false;
+    if (state.currentRole === 'specialist' && state.specialistDirection && state.specialistDirection !== dir.id) return false;
+    if (state.globalApproved && state.currentRole !== 'manager') {
+      if (!dir.unlocked) return false;
+    }
+    if (isPastDate(day, dir) && state.currentRole !== 'manager') return false;
+    const y = state.currentMonth.getFullYear();
+    const m = state.currentMonth.getMonth();
+    if (dir.weekdaysOnly && isNonWorkingDay(y, m, day)) return false;
+    return true;
+  };
+
+  // Smart Focus: is this employee the current on-duty person?
+  const isCurrentDuty = (empId, day, direction) => {
+    const opDay = getOperationalDay(direction);
+    if (opDay < 1) return false;
+    if (day !== opDay) return false;
+    const s = getShift(empId, day).shift;
+    if (!s) return false;
+    const now = new Date();
+    const parts = direction.shiftChangeTime.split(':');
+    const hh = parseInt(parts[0]);
+    const mm = parseInt(parts[1]);
+    const shiftStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm);
+    // For Д/Н (24h): always on duty during operational day
+    if (s === 'Д/Н') return true;
+    // For Д (day): on duty from shift start until evening
+    if (s === 'Д') {
+      return now >= shiftStart;
+    }
+    // For Н (night): on duty from evening until next shift start
+    if (s === 'Н') {
+      return now < shiftStart;
+    }
+    return false;
+  };
+
+  const showToast = (msg, type) => {
+    const container = $el('.ds-toast-container');
+    const toast = document.createElement('div');
+    toast.className = 'ds-toast ' + type;
+    toast.textContent = msg;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity .3s';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  };
+
+  const getExcelCol = (i) => {
+    let c = '';
+    let idx = i;
+    while (idx >= 0) {
+      c = String.fromCharCode(65 + (idx % 26)) + c;
+      idx = Math.floor(idx / 26) - 1;
+    }
+    return c;
+  };
+
+  // --- Demo data ---
+  const generateDemoData = () => {
+    const y = state.currentMonth.getFullYear();
+    const m = state.currentMonth.getMonth();
+    const days = new Date(y, m + 1, 0).getDate();
+    state.scheduleData = {};
+    state.engagementData = {};
+    EMPLOYEES.forEach((emp) => {
+      const dir = DIRECTIONS.find((d) => d.id === emp.directionId);
+      for (let d = 1; d <= days; d++) {
+        const date = new Date(y, m, d);
+        if (dir.weekdaysOnly && (date.getDay() === 0 || date.getDay() === 6)) continue;
+        const r = Math.random();
+        if (r < 0.10) state.scheduleData[emp.id + '_' + d] = { shift: 'Д/Н', draft: false };
+        else if (r < 0.22) state.scheduleData[emp.id + '_' + d] = { shift: 'Д', draft: false };
+        else if (r < 0.30) state.scheduleData[emp.id + '_' + d] = { shift: 'Н', draft: false };
+      }
+    });
+  };
+
+  // --- Render Grid ---
+  const renderGrid = () => {
+    const y = state.currentMonth.getFullYear();
+    const m = state.currentMonth.getMonth();
+    const days = getDaysInMonth(state.currentMonth);
+    const now = new Date();
+    const isCurMonth = (y === now.getFullYear() && m === now.getMonth());
+
+    let visDirs = DIRECTIONS;
+    if (state.currentRole === 'specialist' && state.specialistDirection) {
+      visDirs = DIRECTIONS.filter((d) => d.id === state.specialistDirection);
+    }
+
+    let fHTML = '<table><thead><tr class="ds-header-row">';
+    fHTML += '<th class="ds-col-dept">Подразделение</th><th class="ds-col-dir">Направление</th><th class="ds-col-pos">Должность</th><th class="ds-col-name">ФИО</th><th class="ds-col-phone">Телефон</th><th class="ds-col-total">Итого</th>';
+    fHTML += '</tr></thead><tbody>';
+
+    let sHTML = '<table><thead><tr class="ds-header-row">';
+    for (let d = 1; d <= days; d++) {
+      const date = new Date(y, m, d);
+      const dn = DAY_NAMES[date.getDay()];
+      const isNW = isWeekend(y, m, d) || isHoliday(m, d);
+      const isCH = isCustomHoliday(y, m, d);
+      let cls = 'ds-day-cell';
+      if (isNW || isCH) cls += ' ds-weekend';
+      if (isCH && !isNW) cls += ' ds-holiday-custom';
+      if (isCurMonth && d === now.getDate()) cls += ' ds-today-col';
+      let hasHole = false;
+      visDirs.forEach((dir) => { if (checkHole(dir.id, d)) hasHole = true; });
+      if (hasHole) cls += ' ds-hole';
+      if (state.currentRole === 'manager') cls += ' ds-clickable-header';
+      sHTML += '<th class="' + cls + '" data-day="' + d + '"><span class="ds-day-num">' + d + '</span><span class="ds-day-name">' + dn + '</span></th>';
+    }
+    sHTML += '</tr></thead><tbody>';
+
+    visDirs.forEach((dir) => {
+      const dirEmps = EMPLOYEES.filter((e) => e.directionId === dir.id);
+      const opDay = isCurMonth ? getOperationalDay(dir) : -1;
+
+      fHTML += '<tr class="ds-section-row"><td colspan="6"><div class="ds-section-title"><span>' + dir.name + '</span><span class="ds-section-mode">' + dir.mode + '</span>';
+      if (state.currentRole === 'manager' && state.globalApproved) {
+        fHTML += '<button class="ds-unlock-btn" data-dir="' + dir.id + '">' + (dir.unlocked ? '🔓 Заблокировать' : '🔒 Разблокировать') + '</button>';
+      }
+      fHTML += '</div></td></tr>';
+      sHTML += '<tr class="ds-section-row"><td colspan="' + days + '" style="background:var(--ds-section-bg);border-bottom:2px solid #c5cae9"></td></tr>';
+
+      dirEmps.forEach((emp) => {
+        const total = calculateTotal(emp.id, dir);
+        fHTML += '<tr class="ds-data-row" data-emp="' + emp.id + '"><td class="ds-col-dept" title="' + dir.department + '">' + dir.department + '</td><td class="ds-col-dir" title="' + dir.name + '">' + dir.name + '</td><td class="ds-col-pos" title="' + emp.position + '">' + emp.position + '</td><td class="ds-col-name" title="' + emp.name + '">' + emp.name + '</td><td class="ds-col-phone">' + emp.phone + '</td><td class="ds-col-total">' + total + '</td></tr>';
+
+        sHTML += '<tr class="ds-data-row" data-emp="' + emp.id + '">';
+        for (let d = 1; d <= days; d++) {
+          const data = getShift(emp.id, d);
+          const isNW2 = isNonWorkingDay(y, m, d);
+          const ed = canEdit(emp.id, d);
+          const past = isPastDate(d, dir);
+          const isFocus = isCurMonth && isCurrentDuty(emp.id, d, dir);
+          const engKey = emp.id + '_' + d;
+          const hasEng = !!state.engagementData[engKey];
+
+          let cls2 = 'ds-day-cell';
+          if (data.shift === 'Д') cls2 += ' ds-shift-d';
+          else if (data.shift === 'Н') cls2 += ' ds-shift-n';
+          else if (data.shift === 'Д/Н') cls2 += ' ds-shift-dn';
+          if (isCurMonth && d === opDay) cls2 += ' ds-today-col';
+          if (past && state.currentRole !== 'manager') cls2 += ' ds-past';
+          if (ed) cls2 += ' ds-editable'; else cls2 += ' ds-locked';
+          if (data.draft) cls2 += ' ds-draft-cell';
+          if (isNW2 && !data.shift) cls2 += ' ds-weekend-cell';
+          if (isFocus) cls2 += ' ds-focus-cell';
+
+          let inner = data.shift || '';
+          if (hasEng) inner += '<span class="ds-alert-badge" data-eng-key="' + engKey + '">!</span>';
+
+          sHTML += '<td class="' + cls2 + '" data-emp="' + emp.id + '" data-day="' + d + '" data-dir="' + dir.id + '">' + inner + '</td>';
         }
-        function fmtDateTime() {
-          return new Date().toLocaleString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-          });
-        }
-        function getDaysInMonth(date) {
-          return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-        }
-        function isWeekend(year, month, day) {
-          var d = new Date(year, month, day);
-          return d.getDay() === 0 || d.getDay() === 6;
-        }
-        function isHoliday(month, day) {
-          return HOLIDAYS_RU.includes(
-            String(month + 1).padStart(2, '0') +
-              '-' +
-              String(day).padStart(2, '0'),
-          );
-        }
-        function isCustomHoliday(year, month, day) {
-          return !!state.customHolidays[
-            year +
-              '-' +
-              String(month + 1).padStart(2, '0') +
-              '-' +
-              String(day).padStart(2, '0')
-          ];
-        }
-        function isNonWorkingDay(year, month, day) {
-          return (
-            isWeekend(year, month, day) ||
-            isHoliday(month, day) ||
-            isCustomHoliday(year, month, day)
-          );
-        }
+        sHTML += '</tr>';
+      });
+    });
 
-        // Smart Focus: determine the "operational day" for a direction based on shift change time
-        function getOperationalDay(direction) {
-          var now = new Date();
-          var y = state.currentMonth.getFullYear(),
-            m = state.currentMonth.getMonth();
-          if (y !== now.getFullYear() || m !== now.getMonth()) return -1;
-          var parts = direction.shiftChangeTime.split(':');
-          var hh = parseInt(parts[0]),
-            mm = parseInt(parts[1]);
-          var shiftTime = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-            hh,
-            mm,
-          );
-          return now < shiftTime ? now.getDate() - 1 : now.getDate();
-        }
+    fHTML += '</tbody></table>';
+    sHTML += '</tbody></table>';
+    $el('.ds-frozen-left').innerHTML = fHTML;
+    $el('.ds-scroll-right').innerHTML = sHTML;
 
-        function isPastDate(day, direction) {
-          var now = new Date();
-          if (state.currentMonth.getFullYear() < now.getFullYear()) return true;
-          if (
-            state.currentMonth.getFullYear() === now.getFullYear() &&
-            state.currentMonth.getMonth() < now.getMonth()
-          )
-            return true;
-          if (
-            state.currentMonth.getFullYear() === now.getFullYear() &&
-            state.currentMonth.getMonth() === now.getMonth()
-          ) {
-            return day < getOperationalDay(direction);
-          }
-          return false;
-        }
+    // Attach cell handlers
+    $all('.ds-scroll-right td.ds-editable').forEach((td) => {
+      td.addEventListener('click', (e) => {
+        onCellClick(e, td.getAttribute('data-emp'), parseInt(td.getAttribute('data-day')), td.getAttribute('data-dir'));
+      });
+      td.addEventListener('contextmenu', (e) => {
+        onCellContext(e, td.getAttribute('data-emp'), parseInt(td.getAttribute('data-day')), td.getAttribute('data-dir'));
+      });
+    });
 
-        function getShift(empId, day) {
-          var key = empId + '_' + day;
-          if (state.currentRole === 'specialist' && state.draftData[key])
-            return state.draftData[key];
-          return state.scheduleData[key] || { shift: '', draft: false };
-        }
+    // Attach unlock buttons
+    $all('.ds-unlock-btn').forEach((btn) => {
+      btn.addEventListener('click', () => { toggleDirectionLock(btn.getAttribute('data-dir')); });
+    });
 
-        function setShift(empId, day, shiftValue) {
-          var key = empId + '_' + day;
-          var old = state.scheduleData[key] || { shift: '', draft: false };
+    // Attach header click for custom holidays (manager only)
+    if (state.currentRole === 'manager') {
+      $all('.ds-scroll-right .ds-header-row th.ds-clickable-header').forEach((th) => {
+        th.addEventListener('click', () => {
+          const d = parseInt(th.getAttribute('data-day'));
+          toggleCustomHoliday(d);
+        });
+      });
+    }
+
+    // Attach tooltip for engagement badges
+    $all('.ds-alert-badge').forEach((badge) => {
+      badge.addEventListener('mouseenter', (e) => {
+        const key = badge.getAttribute('data-eng-key');
+        const eng = state.engagementData[key];
+        if (!eng) return;
+        const tip = $el('.ds-tooltip');
+        tip.innerHTML = '<b>Привлечение</b><br>Время: ' + eng.timestamp + '<br>Основание: ' + eng.reason + '<br>Эскалация: ' + (eng.escalation || '—') + '<br>Автор: ' + eng.author;
+        tip.style.display = 'block';
+        tip.style.left = (e.clientX + 12) + 'px';
+        tip.style.top = (e.clientY + 12) + 'px';
+      });
+      badge.addEventListener('mouseleave', () => {
+        $el('.ds-tooltip').style.display = 'none';
+      });
+    });
+  };
+
+  const toggleCustomHoliday = (day) => {
+    const y = state.currentMonth.getFullYear();
+    const m = state.currentMonth.getMonth();
+    const key = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+    if (state.customHolidays[key]) {
+      delete state.customHolidays[key];
+      showToast('День ' + fmtDate(day) + ' снят как праздничный', 'info');
+    } else {
+      state.customHolidays[key] = true;
+      showToast('День ' + fmtDate(day) + ' отмечен как праздничный', 'success');
+    }
+    renderGrid();
+  };
+
+  const updateToolbar = () => {
+    const rb = $el('.ds-role-badge-el');
+    const df = $el('.ds-direction-filter');
+    const ba = $el('.ds-btn-approve');
+    const bp = $el('.ds-btn-publish');
+    const bc = $el('.ds-btn-copy-month');
+    const sb = $el('.ds-status-badge-el');
+
+    if (state.currentRole === 'manager') {
+      rb.textContent = 'Начальник смены';
+      rb.className = 'ds-role-badge manager ds-role-badge-el';
+      df.style.display = 'none';
+      ba.style.display = '';
+      bp.style.display = 'none';
+      bc.style.display = 'none';
+    } else {
+      rb.textContent = 'Специалист';
+      rb.className = 'ds-role-badge specialist ds-role-badge-el';
+      df.style.display = '';
+      ba.style.display = 'none';
+      bp.style.display = '';
+      bc.style.display = '';
+    }
+    if (state.globalApproved) {
+      sb.textContent = 'Утвержден';
+      sb.className = 'ds-status-indicator approved ds-status-badge-el';
+      ba.textContent = '🔓 Снять утверждение';
+    } else {
+      sb.textContent = 'Открыт';
+      sb.className = 'ds-status-indicator open ds-status-badge-el';
+      ba.textContent = '✅ Утвердить график';
+    }
+  };
+
+  // --- Event handlers ---
+  const onCellClick = (e, empId, day, dirId) => {
+    e.stopPropagation();
+    const emp = EMPLOYEES.find((x) => x.id === empId);
+    if (!emp) return;
+    state.editingCell = { employeeId: empId, day: day, directionId: dirId };
+    $el('.ds-modal-employee').value = emp.name;
+    $el('.ds-modal-date').value = fmtDate(day);
+    $el('.ds-modal-shift').value = getShift(empId, day).shift || '';
+    $el('.ds-cell-modal').classList.add('ds-active');
+  };
+
+  const onCellContext = (e, empId, day, dirId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    state.editingCell = { employeeId: empId, day: day, directionId: dirId };
+    const menu = $el('.ds-context-menu');
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+
+    // Show/hide engage/remove-engage based on current state
+    const engKey = empId + '_' + day;
+    const hasEng = !!state.engagementData[engKey];
+    const engItem = menu.querySelector('[data-action="engage"]');
+    const remItem = menu.querySelector('[data-action="remove-engage"]');
+    engItem.style.display = hasEng ? 'none' : '';
+    remItem.style.display = hasEng ? '' : 'none';
+
+    menu.classList.add('ds-active');
+  };
+
+  const closeModal = () => {
+    $el('.ds-cell-modal').classList.remove('ds-active');
+    state.editingCell = null;
+  };
+
+  const closeEngModal = () => {
+    $el('.ds-engagement-modal').classList.remove('ds-active');
+  };
+
+  const saveShift = () => {
+    if (!state.editingCell) return;
+    const { employeeId, day, directionId } = state.editingCell;
+    const sv = $el('.ds-modal-shift').value;
+    const err = validateSlot(directionId, day, employeeId, sv);
+    if (err) { showToast(err, 'error'); return; }
+    setShift(employeeId, day, sv);
+    closeModal();
+    renderGrid();
+    showToast('Смена сохранена', 'success');
+  };
+
+  const toggleApprove = () => {
+    state.globalApproved = !state.globalApproved;
+    if (state.globalApproved) {
+      DIRECTIONS.forEach((d) => { d.unlocked = false; });
+      showToast('График утвержден. Редактирование заблокировано.', 'info');
+    } else {
+      DIRECTIONS.forEach((d) => { d.unlocked = true; });
+      showToast('Утверждение снято. Редактирование разрешено.', 'info');
+    }
+    updateToolbar();
+    renderGrid();
+  };
+
+  const toggleDirectionLock = (dirId) => {
+    const dir = DIRECTIONS.find((d) => d.id === dirId);
+    if (!dir) return;
+    dir.unlocked = !dir.unlocked;
+    showToast('Направление "' + dir.name + '" ' + (dir.unlocked ? 'разблокировано' : 'заблокировано'), 'info');
+    renderGrid();
+  };
+
+  const publishDraft = () => {
+    let c = 0;
+    Object.keys(state.draftData).forEach((k) => {
+      state.scheduleData[k] = { shift: state.draftData[k].shift, draft: false };
+      c++;
+    });
+    state.draftData = {};
+    renderGrid();
+    showToast('Опубликовано ' + c + ' изменений', 'success');
+  };
+
+  const copyPreviousMonth = () => {
+    const dp = getDaysInMonth(new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() - 1, 1));
+    const dc = getDaysInMonth(state.currentMonth);
+    let c = 0;
+    EMPLOYEES.forEach((emp) => {
+      if (state.currentRole === 'specialist' && state.specialistDirection && state.specialistDirection !== emp.directionId) return;
+      for (let d = 1; d <= Math.min(dp, dc); d++) {
+        const pd = state.scheduleData[emp.id + '_' + d];
+        if (pd && pd.shift) {
           if (state.currentRole === 'specialist') {
-            state.draftData[key] = { shift: shiftValue, draft: true };
+            state.draftData[emp.id + '_' + d] = { shift: pd.shift, draft: true };
           } else {
-            state.scheduleData[key] = { shift: shiftValue, draft: false };
+            state.scheduleData[emp.id + '_' + d] = { shift: pd.shift, draft: false };
           }
-          state.auditLog.unshift({
-            timestamp: fmtDateTime(),
-            user:
-              state.currentRole === 'manager'
-                ? 'Начальник смены'
-                : 'Специалист',
-            employee:
-              (
-                EMPLOYEES.find(function (e) {
-                  return e.id === empId;
-                }) || {}
-              ).name || empId,
-            editDate: fmtDate(day),
-            oldValue: old.shift || '—',
-            newValue: shiftValue || '—',
-          });
+          c++;
         }
+      }
+    });
+    renderGrid();
+    showToast('Скопировано ' + c + ' смен из предыдущего месяца', 'success');
+  };
 
-        function calculateTotal(empId, direction) {
-          var days = getDaysInMonth(state.currentMonth);
-          var t = 0;
-          for (var d = 1; d <= days; d++) {
-            var s = getShift(empId, d).shift;
-            if (s === 'Д/Н') t++;
-            else if (s === 'Н') t++;
-            else if (s === 'Д' && direction.countDayShift) t++;
-          }
-          return t;
+  // --- Engagement ---
+  const openEngagementModal = () => {
+    if (!state.editingCell) return;
+    const emp = EMPLOYEES.find((e) => e.id === state.editingCell.employeeId);
+    if (!emp) return;
+    $el('.ds-eng-employee').value = emp.name;
+    $el('.ds-eng-date').value = fmtDate(state.editingCell.day);
+    $el('.ds-eng-reason').value = '';
+    $el('.ds-eng-escalation').value = '';
+    $el('.ds-context-menu').classList.remove('ds-active');
+    $el('.ds-engagement-modal').classList.add('ds-active');
+  };
+
+  const saveEngagement = () => {
+    if (!state.editingCell) return;
+    const { employeeId, day, directionId } = state.editingCell;
+    const reason = $el('.ds-eng-reason').value.trim();
+    const escalation = $el('.ds-eng-escalation').value.trim();
+    if (!reason) { showToast('Укажите основание привлечения', 'error'); return; }
+    const emp = EMPLOYEES.find((e) => e.id === employeeId);
+    const dir = DIRECTIONS.find((d) => d.id === directionId);
+    const ts = fmtDateTime();
+    const author = state.currentRole === 'manager' ? 'Начальник смены' : 'Специалист';
+    state.engagementData[employeeId + '_' + day] = { reason, escalation, author, timestamp: ts };
+    state.engagementLog.unshift({ timestamp: ts, employee: emp ? emp.name : employeeId, direction: dir ? dir.name : '', reason, escalation, author });
+    closeEngModal();
+    renderGrid();
+    showToast('Привлечение отмечено', 'success');
+  };
+
+  const removeEngagement = () => {
+    if (!state.editingCell) return;
+    const key = state.editingCell.employeeId + '_' + state.editingCell.day;
+    delete state.engagementData[key];
+    $el('.ds-context-menu').classList.remove('ds-active');
+    renderGrid();
+    showToast('Привлечение снято', 'info');
+  };
+
+  // --- Settings ---
+  const toggleSettings = () => {
+    const p = $el('.ds-settings-panel');
+    p.classList.toggle('ds-active');
+    $el('.ds-journal-panel').classList.remove('ds-active');
+    if (p.classList.contains('ds-active')) renderSettings();
+  };
+
+  const renderSettings = () => {
+    let h = '';
+    DIRECTIONS.forEach((dir) => {
+      h += '<div class="ds-setting-card"><h4>' + dir.name + '</h4>'
+        + '<div class="ds-setting-row"><label>Время пересменки</label><input type="time" value="' + dir.shiftChangeTime + '" style="width:100px;padding:4px 8px;border:1px solid var(--ds-border);border-radius:4px" data-dir="' + dir.id + '" data-key="shiftChangeTime" class="ds-si" /></div>'
+        + '<div class="ds-setting-row"><label>Учитывать «Д» в Итого</label><label class="ds-toggle-switch"><input type="checkbox" ' + (dir.countDayShift ? 'checked' : '') + ' data-dir="' + dir.id + '" data-key="countDayShift" class="ds-st" /><span class="ds-toggle-slider"></span></label></div>'
+        + '<div class="ds-setting-row"><label>Только будние дни</label><label class="ds-toggle-switch"><input type="checkbox" ' + (dir.weekdaysOnly ? 'checked' : '') + ' data-dir="' + dir.id + '" data-key="weekdaysOnly" class="ds-st" /><span class="ds-toggle-slider"></span></label></div>'
+        + '<div class="ds-setting-row"><label>Контроль укомплектованности</label><label class="ds-toggle-switch"><input type="checkbox" ' + (dir.checkStaffing ? 'checked' : '') + ' data-dir="' + dir.id + '" data-key="checkStaffing" class="ds-st" /><span class="ds-toggle-slider"></span></label></div>'
+        + '</div>';
+    });
+    $el('.ds-settings-content').innerHTML = h;
+    $all('.ds-si').forEach((el) => {
+      el.addEventListener('change', (e) => {
+        const dir = DIRECTIONS.find((d) => d.id === e.target.dataset.dir);
+        if (dir) { dir[e.target.dataset.key] = e.target.value; renderGrid(); showToast('Настройка обновлена', 'success'); }
+      });
+    });
+    $all('.ds-st').forEach((el) => {
+      el.addEventListener('change', (e) => {
+        const dir = DIRECTIONS.find((d) => d.id === e.target.dataset.dir);
+        if (dir) { dir[e.target.dataset.key] = e.target.checked; renderGrid(); showToast('Настройка обновлена', 'success'); }
+      });
+    });
+  };
+
+  // --- Journal (Audit + Engagement tabs) ---
+  const toggleJournal = () => {
+    const p = $el('.ds-journal-panel');
+    p.classList.toggle('ds-active');
+    $el('.ds-settings-panel').classList.remove('ds-active');
+    if (p.classList.contains('ds-active')) renderJournal();
+  };
+
+  const renderJournal = () => {
+    if (state.activeJournalTab === 'audit') renderAudit();
+    else renderEngagementLog();
+  };
+
+  const renderAudit = () => {
+    const body = $el('.ds-audit-body');
+    if (!state.auditLog.length) {
+      body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--ds-text-light)">Нет записей</td></tr>';
+      return;
+    }
+    body.innerHTML = state.auditLog.slice(0, 100).map((l) =>
+      '<tr><td>' + l.timestamp + '</td><td>' + l.user + '</td><td>' + l.employee + '</td><td>' + l.editDate + '</td><td>' + l.oldValue + '</td><td>' + l.newValue + '</td></tr>'
+    ).join('');
+  };
+
+  const renderEngagementLog = () => {
+    const body = $el('.ds-engagement-body');
+    if (!state.engagementLog.length) {
+      body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--ds-text-light)">Нет записей</td></tr>';
+      return;
+    }
+    body.innerHTML = state.engagementLog.slice(0, 100).map((l) =>
+      '<tr><td>' + l.timestamp + '</td><td>' + l.employee + '</td><td>' + l.direction + '</td><td>' + l.reason + '</td><td>' + (l.escalation || '—') + '</td><td>' + l.author + '</td></tr>'
+    ).join('');
+  };
+
+  // --- Export XLSX ---
+  const exportXLSX = () => {
+    const X = window.XLSX;
+    if (!X) { showToast('XLSX не загружен', 'error'); return; }
+    const y = state.currentMonth.getFullYear();
+    const m = state.currentMonth.getMonth();
+    const days = getDaysInMonth(state.currentMonth);
+    const wb = X.utils.book_new();
+    const ws = [];
+    const merges = [];
+    const cw = [{ wch: 18 }, { wch: 22 }, { wch: 16 }, { wch: 22 }, { wch: 16 }, { wch: 8 }];
+    for (let d = 1; d <= days; d++) cw.push({ wch: 5 });
+    const hr = ['Подразделение', 'Направление', 'Должность', 'ФИО', 'Телефон', 'Итого'];
+    for (let d = 1; d <= days; d++) {
+      const dt = new Date(y, m, d);
+      hr.push(d + ' ' + DAY_NAMES[dt.getDay()]);
+    }
+    ws.push(hr);
+    let ri = 1;
+    DIRECTIONS.forEach((dir) => {
+      const de = EMPLOYEES.filter((e) => e.directionId === dir.id);
+      const sr = [dir.name + ' (' + dir.mode + ')'];
+      for (let i = 1; i < 6 + days; i++) sr.push('');
+      ws.push(sr);
+      merges.push({ s: { r: ri, c: 0 }, e: { r: ri, c: 5 + days } });
+      ri++;
+      de.forEach((emp) => {
+        const row = [dir.department, dir.name, emp.position, emp.name, emp.phone];
+        const fp = [];
+        for (let d = 1; d <= days; d++) {
+          const s = getShift(emp.id, d);
+          row.push(s.shift || '');
+          const cl = getExcelCol(6 + d - 1);
+          const cr = cl + (ri + 1);
+          if (dir.countDayShift) fp.push('IF(OR(' + cr + '="Д",' + cr + '="Н",' + cr + '="Д/Н"),1,0)');
+          else fp.push('IF(OR(' + cr + '="Н",' + cr + '="Д/Н"),1,0)');
         }
+        row.splice(5, 0, { f: fp.join('+') });
+        ws.push(row);
+        ri++;
+      });
+    });
+    const sheet = X.utils.aoa_to_sheet(ws);
+    sheet['!cols'] = cw;
+    sheet['!merges'] = merges;
+    if (!sheet['!views']) sheet['!views'] = [{}];
+    sheet['!views'][0] = { state: 'frozen', xSplit: 6, ySplit: 1 };
+    X.utils.book_append_sheet(wb, sheet, MONTH_NAMES[m] + ' ' + y);
+    X.writeFile(wb, 'График_дежурств_' + MONTH_NAMES[m] + '_' + y + '.xlsx');
+    showToast('Файл XLSX экспортирован', 'success');
+  };
 
-        function checkHole(dirId, day) {
-          var dir = DIRECTIONS.find(function (d) {
-            return d.id === dirId;
-          });
-          if (!dir || !dir.checkStaffing) return false;
-          var y = state.currentMonth.getFullYear(),
-            m = state.currentMonth.getMonth();
-          if (dir.weekdaysOnly && isNonWorkingDay(y, m, day)) return false;
-          var emps = EMPLOYEES.filter(function (e) {
-            return e.directionId === dirId;
-          });
-          return !emps.some(function (emp) {
-            var s = getShift(emp.id, day).shift;
-            return s === 'Д' || s === 'Н' || s === 'Д/Н';
-          });
-        }
+  // --- Init ---
+  const now = new Date();
+  const mp = $el('.ds-month-picker');
+  mp.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  state.currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        // Enhanced slot validation: Day slot (Д or Д/Н) max 1, Night slot (Н or Д/Н) max 1
-        function validateSlot(dirId, day, excludeEmpId, newShift) {
-          if (!newShift) return null;
-          var emps = EMPLOYEES.filter(function (e) {
-            return e.directionId === dirId && e.id !== excludeEmpId;
-          });
-          var occupiesDay = newShift === 'Д' || newShift === 'Д/Н';
-          var occupiesNight = newShift === 'Н' || newShift === 'Д/Н';
-          for (var i = 0; i < emps.length; i++) {
-            var emp = emps[i];
-            var s = getShift(emp.id, day).shift;
-            if (!s) continue;
-            var hasDaySlot = s === 'Д' || s === 'Д/Н';
-            var hasNightSlot = s === 'Н' || s === 'Д/Н';
-            if (occupiesDay && hasDaySlot)
-              return (
-                'Дневной слот на ' +
-                fmtDate(day) +
-                ' уже занят (' +
-                emp.name +
-                ')'
-              );
-            if (occupiesNight && hasNightSlot)
-              return (
-                'Ночной слот на ' +
-                fmtDate(day) +
-                ' уже занят (' +
-                emp.name +
-                ')'
-              );
-          }
-          return null;
-        }
+  const df = $el('.ds-direction-filter');
+  DIRECTIONS.forEach((d) => {
+    const o = document.createElement('option');
+    o.value = d.id;
+    o.textContent = d.name;
+    df.appendChild(o);
+  });
 
-        function canEdit(empId, day) {
-          var emp = EMPLOYEES.find(function (e) {
-            return e.id === empId;
-          });
-          if (!emp) return false;
-          var dir = DIRECTIONS.find(function (d) {
-            return d.id === emp.directionId;
-          });
-          if (!dir) return false;
-          if (
-            state.currentRole === 'specialist' &&
-            state.specialistDirection &&
-            state.specialistDirection !== dir.id
-          )
-            return false;
-          if (state.globalApproved && state.currentRole !== 'manager') {
-            if (!dir.unlocked) return false;
-          }
-          if (isPastDate(day, dir) && state.currentRole !== 'manager')
-            return false;
-          var y = state.currentMonth.getFullYear(),
-            m = state.currentMonth.getMonth();
-          if (dir.weekdaysOnly && isNonWorkingDay(y, m, day)) return false;
-          return true;
-        }
+  generateDemoData();
 
-        // Smart Focus: is this employee the current on-duty person?
-        function isCurrentDuty(empId, day, direction) {
-          var opDay = getOperationalDay(direction);
-          if (opDay < 1) return false;
-          if (day !== opDay) return false;
-          var s = getShift(empId, day).shift;
-          if (!s) return false;
-          var now = new Date();
-          var parts = direction.shiftChangeTime.split(':');
-          var hh = parseInt(parts[0]),
-            mm = parseInt(parts[1]);
-          var shiftStart = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-            hh,
-            mm,
-          );
-          // For Д/Н (24h): always on duty during operational day
-          if (s === 'Д/Н') return true;
-          // For Д (day): on duty from shift start until evening
-          if (s === 'Д') {
-            if (now >= shiftStart) return true;
-            return false;
-          }
-          // For Н (night): on duty from evening until next shift start
-          if (s === 'Н') {
-            if (now < shiftStart) return true;
-            return false;
-          }
-          return false;
-        }
+  // Bind events
+  mp.addEventListener('change', (e) => {
+    const parts = e.target.value.split('-');
+    state.currentMonth = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+    generateDemoData();
+    renderGrid();
+  });
 
-        function showToast(msg, type) {
-          var c = document.getElementById('dsToastContainer');
-          var t = document.createElement('div');
-          t.className = 'ds-toast ' + type;
-          t.textContent = msg;
-          c.appendChild(t);
-          setTimeout(function () {
-            t.style.opacity = '0';
-            t.style.transition = 'opacity .3s';
-            setTimeout(function () {
-              t.remove();
-            }, 300);
-          }, 3000);
-        }
+  $el('.ds-role-select').addEventListener('change', (e) => {
+    state.currentRole = e.target.value;
+    updateToolbar();
+    renderGrid();
+  });
 
-        function getExcelCol(i) {
-          var c = '';
-          while (i >= 0) {
-            c = String.fromCharCode(65 + (i % 26)) + c;
-            i = Math.floor(i / 26) - 1;
-          }
-          return c;
-        }
+  df.addEventListener('change', (e) => {
+    state.specialistDirection = e.target.value;
+    renderGrid();
+  });
 
-        // --- Demo data ---
-        function generateDemoData() {
-          var y = state.currentMonth.getFullYear(),
-            m = state.currentMonth.getMonth();
-          var days = new Date(y, m + 1, 0).getDate();
-          state.scheduleData = {};
-          state.engagementData = {};
-          EMPLOYEES.forEach(function (emp) {
-            var dir = DIRECTIONS.find(function (d) {
-              return d.id === emp.directionId;
-            });
-            for (var d = 1; d <= days; d++) {
-              var date = new Date(y, m, d);
-              if (
-                dir.weekdaysOnly &&
-                (date.getDay() === 0 || date.getDay() === 6)
-              )
-                continue;
-              var r = Math.random();
-              if (r < 0.1)
-                state.scheduleData[emp.id + '_' + d] = {
-                  shift: 'Д/Н',
-                  draft: false,
-                };
-              else if (r < 0.22)
-                state.scheduleData[emp.id + '_' + d] = {
-                  shift: 'Д',
-                  draft: false,
-                };
-              else if (r < 0.3)
-                state.scheduleData[emp.id + '_' + d] = {
-                  shift: 'Н',
-                  draft: false,
-                };
-            }
-          });
-        }
+  $el('.ds-btn-settings').addEventListener('click', toggleSettings);
+  $el('.ds-btn-close-settings').addEventListener('click', toggleSettings);
+  $el('.ds-btn-journal').addEventListener('click', toggleJournal);
+  $el('.ds-btn-close-journal').addEventListener('click', toggleJournal);
+  $el('.ds-btn-export').addEventListener('click', exportXLSX);
+  $el('.ds-btn-approve').addEventListener('click', toggleApprove);
+  $el('.ds-btn-publish').addEventListener('click', publishDraft);
+  $el('.ds-btn-copy-month').addEventListener('click', copyPreviousMonth);
+  $el('.ds-btn-cancel-modal').addEventListener('click', closeModal);
+  $el('.ds-btn-save-shift').addEventListener('click', saveShift);
+  $el('.ds-btn-cancel-eng').addEventListener('click', closeEngModal);
+  $el('.ds-btn-save-eng').addEventListener('click', saveEngagement);
 
-        // --- Render Grid ---
-        function renderGrid() {
-          var y = state.currentMonth.getFullYear(),
-            m = state.currentMonth.getMonth();
-          var days = getDaysInMonth(state.currentMonth);
-          var now = new Date();
-          var isCurMonth = y === now.getFullYear() && m === now.getMonth();
+  // Journal tabs
+  $all('.ds-journal-tabs .ds-tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      $all('.ds-journal-tabs .ds-tab-btn').forEach((b) => b.classList.remove('ds-tab-active'));
+      btn.classList.add('ds-tab-active');
+      const tab = btn.getAttribute('data-tab');
+      state.activeJournalTab = tab;
+      $el('.ds-journal-audit-content').style.display = tab === 'audit' ? '' : 'none';
+      $el('.ds-journal-engagement-content').style.display = tab === 'engagement' ? '' : 'none';
+      renderJournal();
+    });
+  });
 
-          var visDirs = DIRECTIONS;
-          if (state.currentRole === 'specialist' && state.specialistDirection)
-            visDirs = DIRECTIONS.filter(function (d) {
-              return d.id === state.specialistDirection;
-            });
+  // Context menu
+  $el('.ds-context-menu').addEventListener('click', (e) => {
+    const action = e.target.dataset ? e.target.dataset.action : null;
+    if (!action || !state.editingCell) return;
+    const { employeeId, day, directionId } = state.editingCell;
+    if (action === 'engage') { openEngagementModal(); return; }
+    if (action === 'remove-engage') { removeEngagement(); return; }
+    let sv = '';
+    if (action === 'set-d') sv = 'Д';
+    else if (action === 'set-n') sv = 'Н';
+    else if (action === 'set-dn') sv = 'Д/Н';
+    const err = validateSlot(directionId, day, employeeId, sv);
+    if (err) { showToast(err, 'error'); return; }
+    setShift(employeeId, day, sv);
+    renderGrid();
+    showToast('Смена обновлена', 'success');
+    $el('.ds-context-menu').classList.remove('ds-active');
+  });
 
-          var fHTML = '<table><thead><tr class="ds-header-row">';
-          fHTML +=
-            '<th class="ds-col-dept">Подразделение</th><th class="ds-col-dir">Направление</th><th class="ds-col-pos">Должность</th><th class="ds-col-name">ФИО</th><th class="ds-col-phone">Телефон</th><th class="ds-col-total">Итого</th>';
-          fHTML += '</tr></thead><tbody>';
+  document.addEventListener('click', () => {
+    $el('.ds-context-menu').classList.remove('ds-active');
+  });
 
-          var sHTML = '<table><thead><tr class="ds-header-row">';
-          for (var d = 1; d <= days; d++) {
-            var date = new Date(y, m, d);
-            var dn = DAY_NAMES[date.getDay()];
-            var isNW = isWeekend(y, m, d) || isHoliday(m, d);
-            var isCH = isCustomHoliday(y, m, d);
-            var cls = 'ds-day-cell';
-            if (isNW || isCH) cls += ' ds-weekend';
-            if (isCH && !isNW) cls += ' ds-holiday-custom';
-            if (isCurMonth && d === now.getDate()) cls += ' ds-today-col';
-            var hasHole = false;
-            visDirs.forEach(function (dir) {
-              if (checkHole(dir.id, d)) hasHole = true;
-            });
-            if (hasHole) cls += ' ds-hole';
-            if (state.currentRole === 'manager') cls += ' ds-clickable-header';
-            sHTML +=
-              '<th class="' +
-              cls +
-              '" data-day="' +
-              d +
-              '"><span class="ds-day-num">' +
-              d +
-              '</span><span class="ds-day-name">' +
-              dn +
-              '</span></th>';
-          }
-          sHTML += '</tr></thead><tbody>';
+  const frozenLeft = $el('.ds-frozen-left');
+  const scrollRight = $el('.ds-scroll-right');
+  scrollRight.addEventListener('scroll', () => {
+    frozenLeft.scrollTop = scrollRight.scrollTop;
+  });
 
-          visDirs.forEach(function (dir) {
-            var dirEmps = EMPLOYEES.filter(function (e) {
-              return e.directionId === dir.id;
-            });
-            var opDay = isCurMonth ? getOperationalDay(dir) : -1;
-
-            fHTML +=
-              '<tr class="ds-section-row"><td colspan="6"><div class="ds-section-title"><span>' +
-              dir.name +
-              '</span><span class="ds-section-mode">' +
-              dir.mode +
-              '</span>';
-            if (state.currentRole === 'manager' && state.globalApproved) {
-              fHTML +=
-                '<button class="ds-unlock-btn" data-dir="' +
-                dir.id +
-                '">' +
-                (dir.unlocked ? '🔓 Заблокировать' : '🔒 Разблокировать') +
-                '</button>';
-            }
-            fHTML += '</div></td></tr>';
-            sHTML +=
-              '<tr class="ds-section-row"><td colspan="' +
-              days +
-              '" style="background:var(--ds-section-bg);border-bottom:2px solid #c5cae9"></td></tr>';
-
-            dirEmps.forEach(function (emp) {
-              var total = calculateTotal(emp.id, dir);
-              fHTML +=
-                '<tr class="ds-data-row" data-emp="' +
-                emp.id +
-                '"><td class="ds-col-dept" title="' +
-                dir.department +
-                '">' +
-                dir.department +
-                '</td><td class="ds-col-dir" title="' +
-                dir.name +
-                '">' +
-                dir.name +
-                '</td><td class="ds-col-pos" title="' +
-                emp.position +
-                '">' +
-                emp.position +
-                '</td><td class="ds-col-name" title="' +
-                emp.name +
-                '">' +
-                emp.name +
-                '</td><td class="ds-col-phone">' +
-                emp.phone +
-                '</td><td class="ds-col-total">' +
-                total +
-                '</td></tr>';
-
-              sHTML += '<tr class="ds-data-row" data-emp="' + emp.id + '">';
-              for (var d = 1; d <= days; d++) {
-                var data = getShift(emp.id, d);
-                var isNW2 = isNonWorkingDay(y, m, d);
-                var ed = canEdit(emp.id, d);
-                var past = isPastDate(d, dir);
-                var isFocus = isCurMonth && isCurrentDuty(emp.id, d, dir);
-                var engKey = emp.id + '_' + d;
-                var hasEng = !!state.engagementData[engKey];
-
-                var cls2 = 'ds-day-cell';
-                if (data.shift === 'Д') cls2 += ' ds-shift-d';
-                else if (data.shift === 'Н') cls2 += ' ds-shift-n';
-                else if (data.shift === 'Д/Н') cls2 += ' ds-shift-dn';
-                if (isCurMonth && d === opDay) cls2 += ' ds-today-col';
-                if (past && state.currentRole !== 'manager') cls2 += ' ds-past';
-                if (ed) cls2 += ' ds-editable';
-                else cls2 += ' ds-locked';
-                if (data.draft) cls2 += ' ds-draft-cell';
-                if (isNW2 && !data.shift) cls2 += ' ds-weekend-cell';
-                if (isFocus) cls2 += ' ds-focus-cell';
-
-                var inner = data.shift || '';
-                if (hasEng)
-                  inner +=
-                    '<span class="ds-alert-badge" data-eng-key="' +
-                    engKey +
-                    '">!</span>';
-
-                sHTML +=
-                  '<td class="' +
-                  cls2 +
-                  '" data-emp="' +
-                  emp.id +
-                  '" data-day="' +
-                  d +
-                  '" data-dir="' +
-                  dir.id +
-                  '">' +
-                  inner +
-                  '</td>';
-              }
-              sHTML += '</tr>';
-            });
-          });
-
-          fHTML += '</tbody></table>';
-          sHTML += '</tbody></table>';
-          document.getElementById('dsFrozenLeft').innerHTML = fHTML;
-          document.getElementById('dsScrollRight').innerHTML = sHTML;
-
-          // Attach cell handlers
-          document
-            .querySelectorAll('#dsScrollRight td.ds-editable')
-            .forEach(function (td) {
-              td.addEventListener('click', function (e) {
-                onCellClick(
-                  e,
-                  td.getAttribute('data-emp'),
-                  parseInt(td.getAttribute('data-day')),
-                  td.getAttribute('data-dir'),
-                );
-              });
-              td.addEventListener('contextmenu', function (e) {
-                onCellContext(
-                  e,
-                  td.getAttribute('data-emp'),
-                  parseInt(td.getAttribute('data-day')),
-                  td.getAttribute('data-dir'),
-                );
-              });
-            });
-
-          // Attach unlock buttons
-          document.querySelectorAll('.ds-unlock-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-              toggleDirectionLock(btn.getAttribute('data-dir'));
-            });
-          });
-
-          // Attach header click for custom holidays (manager only)
-          if (state.currentRole === 'manager') {
-            document
-              .querySelectorAll(
-                '#dsScrollRight .ds-header-row th.ds-clickable-header',
-              )
-              .forEach(function (th) {
-                th.addEventListener('click', function () {
-                  var d = parseInt(th.getAttribute('data-day'));
-                  toggleCustomHoliday(d);
-                });
-              });
-          }
-
-          // Attach tooltip for engagement badges
-          document
-            .querySelectorAll('.ds-alert-badge')
-            .forEach(function (badge) {
-              badge.addEventListener('mouseenter', function (e) {
-                var key = badge.getAttribute('data-eng-key');
-                var eng = state.engagementData[key];
-                if (!eng) return;
-                var tip = document.getElementById('dsTooltip');
-                tip.innerHTML =
-                  '<b>Привлечение</b><br>Время: ' +
-                  eng.timestamp +
-                  '<br>Основание: ' +
-                  eng.reason +
-                  '<br>Эскалация: ' +
-                  (eng.escalation || '—') +
-                  '<br>Автор: ' +
-                  eng.author;
-                tip.style.display = 'block';
-                tip.style.left = e.clientX + 12 + 'px';
-                tip.style.top = e.clientY + 12 + 'px';
-              });
-              badge.addEventListener('mouseleave', function () {
-                document.getElementById('dsTooltip').style.display = 'none';
-              });
-            });
-        }
-
-        function toggleCustomHoliday(day) {
-          var y = state.currentMonth.getFullYear(),
-            m = state.currentMonth.getMonth();
-          var key =
-            y +
-            '-' +
-            String(m + 1).padStart(2, '0') +
-            '-' +
-            String(day).padStart(2, '0');
-          if (state.customHolidays[key]) {
-            delete state.customHolidays[key];
-            showToast('День ' + fmtDate(day) + ' снят как праздничный', 'info');
-          } else {
-            state.customHolidays[key] = true;
-            showToast(
-              'День ' + fmtDate(day) + ' отмечен как праздничный',
-              'success',
-            );
-          }
-          renderGrid();
-        }
-
-        function updateToolbar() {
-          var rb = document.getElementById('dsRoleBadge');
-          var df = document.getElementById('dsDirectionFilter');
-          var ba = document.getElementById('dsBtnApprove');
-          var bp = document.getElementById('dsBtnPublish');
-          var bc = document.getElementById('dsBtnCopyMonth');
-          var sb = document.getElementById('dsStatusBadge');
-
-          if (state.currentRole === 'manager') {
-            rb.textContent = 'Начальник смены';
-            rb.className = 'ds-role-badge manager';
-            df.style.display = 'none';
-            ba.style.display = '';
-            bp.style.display = 'none';
-            bc.style.display = 'none';
-          } else {
-            rb.textContent = 'Специалист';
-            rb.className = 'ds-role-badge specialist';
-            df.style.display = '';
-            ba.style.display = 'none';
-            bp.style.display = '';
-            bc.style.display = '';
-          }
-          if (state.globalApproved) {
-            sb.textContent = 'Утвержден';
-            sb.className = 'ds-status-indicator approved';
-            ba.textContent = '🔓 Снять утверждение';
-          } else {
-            sb.textContent = 'Открыт';
-            sb.className = 'ds-status-indicator open';
-            ba.textContent = '✅ Утвердить график';
-          }
-        }
-
-        // --- Event handlers ---
-        function onCellClick(e, empId, day, dirId) {
-          e.stopPropagation();
-          var emp = EMPLOYEES.find(function (x) {
-            return x.id === empId;
-          });
-          if (!emp) return;
-          state.editingCell = {
-            employeeId: empId,
-            day: day,
-            directionId: dirId,
-          };
-          document.getElementById('dsModalEmployee').value = emp.name;
-          document.getElementById('dsModalDate').value = fmtDate(day);
-          document.getElementById('dsModalShift').value =
-            getShift(empId, day).shift || '';
-          document.getElementById('dsCellModal').classList.add('ds-active');
-        }
-
-        function onCellContext(e, empId, day, dirId) {
-          e.preventDefault();
-          e.stopPropagation();
-          state.editingCell = {
-            employeeId: empId,
-            day: day,
-            directionId: dirId,
-          };
-          var menu = document.getElementById('dsContextMenu');
-          menu.style.left = e.clientX + 'px';
-          menu.style.top = e.clientY + 'px';
-
-          // Show/hide engage/remove-engage based on current state
-          var engKey = empId + '_' + day;
-          var hasEng = !!state.engagementData[engKey];
-          var engItem = menu.querySelector('[data-action="engage"]');
-          var remItem = menu.querySelector('[data-action="remove-engage"]');
-          engItem.style.display = hasEng ? 'none' : '';
-          remItem.style.display = hasEng ? '' : 'none';
-
-          menu.classList.add('ds-active');
-        }
-
-        function closeModal() {
-          document.getElementById('dsCellModal').classList.remove('ds-active');
-          state.editingCell = null;
-        }
-        function closeEngModal() {
-          document
-            .getElementById('dsEngagementModal')
-            .classList.remove('ds-active');
-        }
-
-        function saveShift() {
-          if (!state.editingCell) return;
-          var employeeId = state.editingCell.employeeId;
-          var day = state.editingCell.day;
-          var directionId = state.editingCell.directionId;
-          var sv = document.getElementById('dsModalShift').value;
-          var err = validateSlot(directionId, day, employeeId, sv);
-          if (err) {
-            showToast(err, 'error');
-            return;
-          }
-          setShift(employeeId, day, sv);
-          closeModal();
-          renderGrid();
-          showToast('Смена сохранена', 'success');
-        }
-
-        function toggleApprove() {
-          state.globalApproved = !state.globalApproved;
-          if (state.globalApproved) {
-            DIRECTIONS.forEach(function (d) {
-              d.unlocked = false;
-            });
-            showToast(
-              'График утвержден. Редактирование заблокировано.',
-              'info',
-            );
-          } else {
-            DIRECTIONS.forEach(function (d) {
-              d.unlocked = true;
-            });
-            showToast('Утверждение снято. Редактирование разрешено.', 'info');
-          }
-          updateToolbar();
-          renderGrid();
-        }
-
-        function toggleDirectionLock(dirId) {
-          var dir = DIRECTIONS.find(function (d) {
-            return d.id === dirId;
-          });
-          if (!dir) return;
-          dir.unlocked = !dir.unlocked;
-          showToast(
-            'Направление "' +
-              dir.name +
-              '" ' +
-              (dir.unlocked ? 'разблокировано' : 'заблокировано'),
-            'info',
-          );
-          renderGrid();
-        }
-
-        function publishDraft() {
-          var c = 0;
-          Object.keys(state.draftData).forEach(function (k) {
-            state.scheduleData[k] = {
-              shift: state.draftData[k].shift,
-              draft: false,
-            };
-            c++;
-          });
-          state.draftData = {};
-          renderGrid();
-          showToast('Опубликовано ' + c + ' изменений', 'success');
-        }
-
-        function copyPreviousMonth() {
-          var dp = getDaysInMonth(
-            new Date(
-              state.currentMonth.getFullYear(),
-              state.currentMonth.getMonth() - 1,
-              1,
-            ),
-          );
-          var dc = getDaysInMonth(state.currentMonth);
-          var c = 0;
-          EMPLOYEES.forEach(function (emp) {
-            if (
-              state.currentRole === 'specialist' &&
-              state.specialistDirection &&
-              state.specialistDirection !== emp.directionId
-            )
-              return;
-            for (var d = 1; d <= Math.min(dp, dc); d++) {
-              var pd = state.scheduleData[emp.id + '_' + d];
-              if (pd && pd.shift) {
-                if (state.currentRole === 'specialist')
-                  state.draftData[emp.id + '_' + d] = {
-                    shift: pd.shift,
-                    draft: true,
-                  };
-                else
-                  state.scheduleData[emp.id + '_' + d] = {
-                    shift: pd.shift,
-                    draft: false,
-                  };
-                c++;
-              }
-            }
-          });
-          renderGrid();
-          showToast(
-            'Скопировано ' + c + ' смен из предыдущего месяца',
-            'success',
-          );
-        }
-
-        // --- Engagement ---
-        function openEngagementModal() {
-          if (!state.editingCell) return;
-          var emp = EMPLOYEES.find(function (e) {
-            return e.id === state.editingCell.employeeId;
-          });
-          if (!emp) return;
-          document.getElementById('dsEngEmployee').value = emp.name;
-          document.getElementById('dsEngDate').value = fmtDate(
-            state.editingCell.day,
-          );
-          document.getElementById('dsEngReason').value = '';
-          document.getElementById('dsEngEscalation').value = '';
-          document
-            .getElementById('dsContextMenu')
-            .classList.remove('ds-active');
-          document
-            .getElementById('dsEngagementModal')
-            .classList.add('ds-active');
-        }
-
-        function saveEngagement() {
-          if (!state.editingCell) return;
-          var employeeId = state.editingCell.employeeId;
-          var day = state.editingCell.day;
-          var reason = document.getElementById('dsEngReason').value.trim();
-          var escalation = document
-            .getElementById('dsEngEscalation')
-            .value.trim();
-          if (!reason) {
-            showToast('Укажите основание привлечения', 'error');
-            return;
-          }
-          var emp = EMPLOYEES.find(function (e) {
-            return e.id === employeeId;
-          });
-          var dir = DIRECTIONS.find(function (d) {
-            return d.id === state.editingCell.directionId;
-          });
-          var ts = fmtDateTime();
-          var author =
-            state.currentRole === 'manager' ? 'Начальник смены' : 'Специалист';
-          state.engagementData[employeeId + '_' + day] = {
-            reason: reason,
-            escalation: escalation,
-            author: author,
-            timestamp: ts,
-          };
-          state.engagementLog.unshift({
-            timestamp: ts,
-            employee: emp ? emp.name : employeeId,
-            direction: dir ? dir.name : '',
-            reason: reason,
-            escalation: escalation,
-            author: author,
-          });
-          closeEngModal();
-          renderGrid();
-          showToast('Привлечение отмечено', 'success');
-        }
-
-        function removeEngagement() {
-          if (!state.editingCell) return;
-          var key = state.editingCell.employeeId + '_' + state.editingCell.day;
-          delete state.engagementData[key];
-          document
-            .getElementById('dsContextMenu')
-            .classList.remove('ds-active');
-          renderGrid();
-          showToast('Привлечение снято', 'info');
-        }
-
-        // --- Settings ---
-        function toggleSettings() {
-          var p = document.getElementById('dsSettingsPanel');
-          p.classList.toggle('ds-active');
-          document
-            .getElementById('dsJournalPanel')
-            .classList.remove('ds-active');
-          if (p.classList.contains('ds-active')) renderSettings();
-        }
-
-        function renderSettings() {
-          var h = '';
-          DIRECTIONS.forEach(function (dir) {
-            h +=
-              '<div class="ds-setting-card"><h4>' +
-              dir.name +
-              '</h4>' +
-              '<div class="ds-setting-row"><label>Время пересменки</label><input type="time" value="' +
-              dir.shiftChangeTime +
-              '" style="width:100px;padding:4px 8px;border:1px solid var(--ds-border);border-radius:4px" data-dir="' +
-              dir.id +
-              '" data-key="shiftChangeTime" class="ds-si" /></div>' +
-              '<div class="ds-setting-row"><label>Учитывать «Д» в Итого</label><label class="ds-toggle-switch"><input type="checkbox" ' +
-              (dir.countDayShift ? 'checked' : '') +
-              ' data-dir="' +
-              dir.id +
-              '" data-key="countDayShift" class="ds-st" /><span class="ds-toggle-slider"></span></label></div>' +
-              '<div class="ds-setting-row"><label>Только будние дни</label><label class="ds-toggle-switch"><input type="checkbox" ' +
-              (dir.weekdaysOnly ? 'checked' : '') +
-              ' data-dir="' +
-              dir.id +
-              '" data-key="weekdaysOnly" class="ds-st" /><span class="ds-toggle-slider"></span></label></div>' +
-              '<div class="ds-setting-row"><label>Контроль укомплектованности</label><label class="ds-toggle-switch"><input type="checkbox" ' +
-              (dir.checkStaffing ? 'checked' : '') +
-              ' data-dir="' +
-              dir.id +
-              '" data-key="checkStaffing" class="ds-st" /><span class="ds-toggle-slider"></span></label></div>' +
-              '</div>';
-          });
-          document.getElementById('dsSettingsContent').innerHTML = h;
-          document.querySelectorAll('.ds-si').forEach(function (el) {
-            el.addEventListener('change', function (e) {
-              var dir = DIRECTIONS.find(function (d) {
-                return d.id === e.target.dataset.dir;
-              });
-              if (dir) {
-                dir[e.target.dataset.key] = e.target.value;
-                renderGrid();
-                showToast('Настройка обновлена', 'success');
-              }
-            });
-          });
-          document.querySelectorAll('.ds-st').forEach(function (el) {
-            el.addEventListener('change', function (e) {
-              var dir = DIRECTIONS.find(function (d) {
-                return d.id === e.target.dataset.dir;
-              });
-              if (dir) {
-                dir[e.target.dataset.key] = e.target.checked;
-                renderGrid();
-                showToast('Настройка обновлена', 'success');
-              }
-            });
-          });
-        }
-
-        // --- Journal (Audit + Engagement tabs) ---
-        function toggleJournal() {
-          var p = document.getElementById('dsJournalPanel');
-          p.classList.toggle('ds-active');
-          document
-            .getElementById('dsSettingsPanel')
-            .classList.remove('ds-active');
-          if (p.classList.contains('ds-active')) renderJournal();
-        }
-
-        function renderJournal() {
-          if (state.activeJournalTab === 'audit') renderAudit();
-          else renderEngagementLog();
-        }
-
-        function renderAudit() {
-          var body = document.getElementById('dsAuditBody');
-          if (!state.auditLog.length) {
-            body.innerHTML =
-              '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--ds-text-light)">Нет записей</td></tr>';
-            return;
-          }
-          body.innerHTML = state.auditLog
-            .slice(0, 100)
-            .map(function (l) {
-              return (
-                '<tr><td>' +
-                l.timestamp +
-                '</td><td>' +
-                l.user +
-                '</td><td>' +
-                l.employee +
-                '</td><td>' +
-                l.editDate +
-                '</td><td>' +
-                l.oldValue +
-                '</td><td>' +
-                l.newValue +
-                '</td></tr>'
-              );
-            })
-            .join('');
-        }
-
-        function renderEngagementLog() {
-          var body = document.getElementById('dsEngagementBody');
-          if (!state.engagementLog.length) {
-            body.innerHTML =
-              '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--ds-text-light)">Нет записей</td></tr>';
-            return;
-          }
-          body.innerHTML = state.engagementLog
-            .slice(0, 100)
-            .map(function (l) {
-              return (
-                '<tr><td>' +
-                l.timestamp +
-                '</td><td>' +
-                l.employee +
-                '</td><td>' +
-                l.direction +
-                '</td><td>' +
-                l.reason +
-                '</td><td>' +
-                (l.escalation || '—') +
-                '</td><td>' +
-                l.author +
-                '</td></tr>'
-              );
-            })
-            .join('');
-        }
-
-        // --- Export XLSX ---
-        function exportXLSX() {
-          var X = window.XLSX;
-          if (!X) {
-            showToast('XLSX не загружен', 'error');
-            return;
-          }
-          var y = state.currentMonth.getFullYear(),
-            m = state.currentMonth.getMonth();
-          var days = getDaysInMonth(state.currentMonth);
-          var wb = X.utils.book_new();
-          var ws = [];
-          var merges = [];
-          var cw = [
-            { wch: 18 },
-            { wch: 22 },
-            { wch: 16 },
-            { wch: 22 },
-            { wch: 16 },
-            { wch: 8 },
-          ];
-          for (var d = 1; d <= days; d++) cw.push({ wch: 5 });
-          var hr = [
-            'Подразделение',
-            'Направление',
-            'Должность',
-            'ФИО',
-            'Телефон',
-            'Итого',
-          ];
-          for (var d = 1; d <= days; d++) {
-            var dt = new Date(y, m, d);
-            hr.push(d + ' ' + DAY_NAMES[dt.getDay()]);
-          }
-          ws.push(hr);
-          var ri = 1;
-          DIRECTIONS.forEach(function (dir) {
-            var de = EMPLOYEES.filter(function (e) {
-              return e.directionId === dir.id;
-            });
-            var sr = [dir.name + ' (' + dir.mode + ')'];
-            for (var i = 1; i < 6 + days; i++) sr.push('');
-            ws.push(sr);
-            merges.push({ s: { r: ri, c: 0 }, e: { r: ri, c: 5 + days } });
-            ri++;
-            de.forEach(function (emp) {
-              var row = [
-                dir.department,
-                dir.name,
-                emp.position,
-                emp.name,
-                emp.phone,
-              ];
-              var fp = [];
-              for (var d = 1; d <= days; d++) {
-                var s = getShift(emp.id, d);
-                row.push(s.shift || '');
-                var cl = getExcelCol(6 + d - 1),
-                  cr = cl + (ri + 1);
-                if (dir.countDayShift)
-                  fp.push(
-                    'IF(OR(' +
-                      cr +
-                      '="Д",' +
-                      cr +
-                      '="Н",' +
-                      cr +
-                      '="Д/Н"),1,0)',
-                  );
-                else fp.push('IF(OR(' + cr + '="Н",' + cr + '="Д/Н"),1,0)');
-              }
-              row.splice(5, 0, { f: fp.join('+') });
-              ws.push(row);
-              ri++;
-            });
-          });
-          var sheet = X.utils.aoa_to_sheet(ws);
-          sheet['!cols'] = cw;
-          sheet['!merges'] = merges;
-          if (!sheet['!views']) sheet['!views'] = [{}];
-          sheet['!views'][0] = { state: 'frozen', xSplit: 6, ySplit: 1 };
-          X.utils.book_append_sheet(wb, sheet, MONTH_NAMES[m] + ' ' + y);
-          X.writeFile(
-            wb,
-            'График_дежурств_' + MONTH_NAMES[m] + '_' + y + '.xlsx',
-          );
-          showToast('Файл XLSX экспортирован', 'success');
-        }
-
-        // --- Init ---
-        var now = new Date();
-        var mp = document.getElementById('dsMonthPicker');
-        mp.value =
-          now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
-        state.currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-        var df = document.getElementById('dsDirectionFilter');
-        DIRECTIONS.forEach(function (d) {
-          var o = document.createElement('option');
-          o.value = d.id;
-          o.textContent = d.name;
-          df.appendChild(o);
-        });
-
-        generateDemoData();
-
-        // Bind events
-        mp.addEventListener('change', function (e) {
-          var parts = e.target.value.split('-');
-          state.currentMonth = new Date(
-            parseInt(parts[0]),
-            parseInt(parts[1]) - 1,
-            1,
-          );
-          generateDemoData();
-          renderGrid();
-        });
-        document
-          .getElementById('dsRoleSelect')
-          .addEventListener('change', function (e) {
-            state.currentRole = e.target.value;
-            updateToolbar();
-            renderGrid();
-          });
-        df.addEventListener('change', function (e) {
-          state.specialistDirection = e.target.value;
-          renderGrid();
-        });
-
-        document
-          .getElementById('dsBtnSettings')
-          .addEventListener('click', toggleSettings);
-        document
-          .getElementById('dsBtnCloseSettings')
-          .addEventListener('click', toggleSettings);
-        document
-          .getElementById('dsBtnJournal')
-          .addEventListener('click', toggleJournal);
-        document
-          .getElementById('dsBtnCloseJournal')
-          .addEventListener('click', toggleJournal);
-        document
-          .getElementById('dsBtnExport')
-          .addEventListener('click', exportXLSX);
-        document
-          .getElementById('dsBtnApprove')
-          .addEventListener('click', toggleApprove);
-        document
-          .getElementById('dsBtnPublish')
-          .addEventListener('click', publishDraft);
-        document
-          .getElementById('dsBtnCopyMonth')
-          .addEventListener('click', copyPreviousMonth);
-        document
-          .getElementById('dsBtnCancelModal')
-          .addEventListener('click', closeModal);
-        document
-          .getElementById('dsBtnSaveShift')
-          .addEventListener('click', saveShift);
-        document
-          .getElementById('dsBtnCancelEng')
-          .addEventListener('click', closeEngModal);
-        document
-          .getElementById('dsBtnSaveEng')
-          .addEventListener('click', saveEngagement);
-
-        // Journal tabs
-        document
-          .querySelectorAll('#dsJournalTabs .ds-tab-btn')
-          .forEach(function (btn) {
-            btn.addEventListener('click', function () {
-              document
-                .querySelectorAll('#dsJournalTabs .ds-tab-btn')
-                .forEach(function (b) {
-                  b.classList.remove('ds-tab-active');
-                });
-              btn.classList.add('ds-tab-active');
-              var tab = btn.getAttribute('data-tab');
-              state.activeJournalTab = tab;
-              document.getElementById('dsJournalAuditContent').style.display =
-                tab === 'audit' ? '' : 'none';
-              document.getElementById(
-                'dsJournalEngagementContent',
-              ).style.display = tab === 'engagement' ? '' : 'none';
-              renderJournal();
-            });
-          });
-
-        // Context menu
-        document
-          .getElementById('dsContextMenu')
-          .addEventListener('click', function (e) {
-            var action = e.target.dataset ? e.target.dataset.action : null;
-            if (!action || !state.editingCell) return;
-            var employeeId = state.editingCell.employeeId;
-            var day = state.editingCell.day;
-            var directionId = state.editingCell.directionId;
-            if (action === 'engage') {
-              openEngagementModal();
-              return;
-            }
-            if (action === 'remove-engage') {
-              removeEngagement();
-              return;
-            }
-            var sv = '';
-            if (action === 'set-d') sv = 'Д';
-            else if (action === 'set-n') sv = 'Н';
-            else if (action === 'set-dn') sv = 'Д/Н';
-            var err = validateSlot(directionId, day, employeeId, sv);
-            if (err) {
-              showToast(err, 'error');
-              return;
-            }
-            setShift(employeeId, day, sv);
-            renderGrid();
-            showToast('Смена обновлена', 'success');
-            document
-              .getElementById('dsContextMenu')
-              .classList.remove('ds-active');
-          });
-
-        document.addEventListener('click', function () {
-          document
-            .getElementById('dsContextMenu')
-            .classList.remove('ds-active');
-        });
-
-        var fl = document.getElementById('dsFrozenLeft');
-        var sr = document.getElementById('dsScrollRight');
-        sr.addEventListener('scroll', function () {
-          fl.scrollTop = sr.scrollTop;
-        });
-
-        renderGrid();
-        updateToolbar();
-      })();
-    </script>
-  </body>
+  renderGrid();
+  updateToolbar();
+})();
+</script>
+</body>
 </html>
