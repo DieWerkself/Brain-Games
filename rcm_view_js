@@ -1,0 +1,4214 @@
+/**
+ * ============================================================================
+ * SimpleOne — Модуль визуализации ресурсно-сервисной модели (РСМ)
+ * ============================================================================
+ * v5.2 — Рефакторинг:
+ *   - Современный синтаксис ES6+ (let/const, стрелочные функции, шаблонные строки)
+ *   - Привязка к элементам через CSS-классы (.js-xxx) вместо id
+ *   - Все display: none в HTML-разметке обёрнуты в кавычки
+ *   - Единый файл с подключением внешних библиотек в начале
+ * ============================================================================
+ * Внешние зависимости (подключить перед этим файлом):
+ *   - Cytoscape.js 3.28.1
+ *   - Dagre 0.8.5
+ *   - cytoscape-dagre 2.5.0
+ *   - ELK.js 0.9.2
+ *   - cytoscape-elk 2.3.0
+ *   - html2canvas 1.4.1
+ * ============================================================================
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   1. КОНСТАНТЫ И КОНФИГУРАЦИЯ
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Impact analysis performance limits */
+const IMPACT_MAX_DEPTH = 25;
+const IMPACT_MAX_NODES = 500;
+const IMPACT_MAX_CHAIN_EDGES = 300;
+
+/* SLA Heatmap colors */
+const SLA_HEATMAP = {
+  '99.99%': { color: '#2E7D32', border: '#43A047', label: 'Критичный' },
+  '99.95%': { color: '#558B2F', border: '#689F38', label: 'Высокий' },
+  '99.9%':  { color: '#F9A825', border: '#FBC02D', label: 'Средний' },
+  '99.5%':  { color: '#EF6C00', border: '#F57C00', label: 'Пониженный' },
+  '99%':    { color: '#D84315', border: '#E64A19', label: 'Низкий' },
+  '—':      { color: '#78909C', border: '#90A4AE', label: 'Не задан' },
+};
+
+const COLORS = {
+  bg:            '#F4F5F7',
+  surface:       '#FFFFFF',
+  border:        '#E1E4E8',
+  borderHover:   '#0078CF',
+  text:          '#2E3238',
+  textSecondary: '#6B7280',
+  textMuted:     '#9CA3AF',
+  accent:        '#0078CF',
+  accentLight:   '#66BFFF',
+  accentBg:      '#EBF5FF',
+  danger:        '#E53935',
+  dangerBg:      '#FFEBEE',
+  success:       '#43A047',
+  successBg:     '#E8F5E9',
+  warning:       '#FB8C00',
+  warningBg:     '#FFF3E0',
+  edge:          '#B0BEC5',
+  edgeHover:     '#0078CF',
+  transitiveEdge:'#FF9800',
+  groupBg:       '#F0F4F8',
+  groupBorder:   '#CBD5E1',
+  headerBg:      '#FFFFFF',
+  sidebarBg:     '#FFFFFF',
+  impactHigh:    '#D32F2F',
+  impactMed:     '#F57C00',
+  impactLow:     '#FFA726',
+  impactEdge:    '#E53935',
+  autoSource:    '#1565C0',
+  manualSource:  '#7B1FA2',
+};
+
+const FONT = "'Roboto', 'Segoe UI', Arial, sans-serif";
+
+const CI_TYPE_HIERARCHY = [
+  'ИТ-сервис', 'ИТ-система', 'Прикладное ПО', 'Компонент прикладного ПО',
+  'База данных', 'Кластер', 'Виртуальное рабочее место',
+  'Пул виртуальных рабочих мест', 'Частная подписка', 'Виртуальный сервер',
+  'Кластер контейнеризации', 'Публичная подписка', 'Кластер виртуализации',
+  'Сервер', 'Том/раздел', 'Сетевое оборудование', 'Коммутатор SAN',
+  'СХД', 'Шасси', 'Устройство резервного копирования', 'Шкаф', 'ПАК',
+  'Оборудование не Банка', 'Площадка', 'Кондиционер', 'ИБП',
+];
+
+const CI_TYPE_COLORS = {};
+(function() {
+  const palette = [
+    '#1565C0','#0277BD','#00838F','#00695C','#2E7D32',
+    '#558B2F','#9E9D24','#F9A825','#FF8F00','#EF6C00',
+    '#D84315','#4E342E','#37474F','#455A64','#546E7A',
+    '#5C6BC0','#7E57C2','#AB47BC','#EC407A','#78909C',
+    '#8D6E63','#6D4C41','#3E2723','#263238','#B71C1C','#1B5E20',
+  ];
+  CI_TYPE_HIERARCHY.forEach((t, i) => {
+    CI_TYPE_COLORS[t] = palette[i % palette.length];
+  });
+})();
+
+/* Зоны для схлопывающихся слоёв */
+const LAYER_ZONES = [
+  { id: 'services', name: 'Сервисы', icon: '🔷', types: ['ИТ-сервис', 'ИТ-система'] },
+  { id: 'applications', name: 'Прикладное ПО', icon: '🔶', types: ['Прикладное ПО', 'Компонент прикладного ПО', 'База данных'] },
+  { id: 'infrastructure', name: 'Инфраструктура', icon: '⬡', types: [
+    'Кластер', 'Виртуальное рабочее место', 'Пул виртуальных рабочих мест',
+    'Частная подписка', 'Виртуальный сервер', 'Кластер контейнеризации',
+    'Публичная подписка', 'Кластер виртуализации', 'Сервер', 'Том/раздел',
+    'Сетевое оборудование', 'Коммутатор SAN', 'СХД', 'Шасси',
+    'Устройство резервного копирования', 'Шкаф', 'ПАК',
+    'Оборудование не Банка', 'Площадка', 'Кондиционер', 'ИБП',
+  ]},
+];
+
+const STATUSES = ['В работе', 'Активен', 'На обслуживании', 'Выведен'];
+const ENVIRONMENTS = ['Production', 'Staging', 'Development', 'Testing'];
+const SITES = ['ЦОД Москва-1', 'ЦОД Москва-2', 'ЦОД Санкт-Петербург', 'ЦОД Новосибирск'];
+const RESPONSIBLES = ['Иванов А.В.', 'Петров Б.С.', 'Сидорова Е.Н.', 'Козлов Д.М.', 'Новикова О.П.'];
+const SLA_VALUES = ['99.99%', '99.95%', '99.9%', '99.5%', '99%', '—'];
+
+const SHORT_NAMES = {
+  'ИТ-сервис':'SVC','ИТ-система':'SYS','Прикладное ПО':'APP',
+  'Компонент прикладного ПО':'COMP','База данных':'DB','Кластер':'CLU',
+  'Виртуальное рабочее место':'VDI','Пул виртуальных рабочих мест':'POOL',
+  'Частная подписка':'PSUB','Виртуальный сервер':'VM',
+  'Кластер контейнеризации':'K8S','Публичная подписка':'PUBSUB',
+  'Кластер виртуализации':'VCLUST','Сервер':'SRV','Том/раздел':'VOL',
+  'Сетевое оборудование':'NET','Коммутатор SAN':'SAN','СХД':'STO',
+  'Шасси':'CHS','Устройство резервного копирования':'BKP','Шкаф':'RACK',
+  'ПАК':'PAK','Оборудование не Банка':'EXT','Площадка':'SITE',
+  'Кондиционер':'AC','ИБП':'UPS',
+};
+
+/* Предустановленные пресеты */
+const DEFAULT_PRESETS = [
+  { name: 'Расследование сбоев', desc: 'ИТ-сервисы + серверы + БД (Production)', filters: { types: ['ИТ-сервис','ИТ-система','Прикладное ПО','База данных','Сервер','Виртуальный сервер'], statuses: [...STATUSES], sites: [...SITES], environments: ['Production'] }, direction:'top-down', groupMode:true },
+  { name: 'Связка сервисов', desc: 'Только сервисный слой', filters: { types: ['ИТ-сервис','ИТ-система','Прикладное ПО','Компонент прикладного ПО'], statuses: [...STATUSES], sites: [...SITES], environments: [...ENVIRONMENTS] }, direction:'top-down', groupMode:true },
+  { name: 'Инфраструктура', desc: 'Серверы, сети, хранение', filters: { types: ['Сервер','Виртуальный сервер','Кластер виртуализации','Сетевое оборудование','Коммутатор SAN','СХД','Шасси','Шкаф','Площадка'], statuses: [...STATUSES], sites: [...SITES], environments: [...ENVIRONMENTS] }, direction:'bottom-up', groupMode:true },
+];
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   2. ГЕНЕРАЦИЯ МОКОВЫХ ДАННЫХ
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function generateMockData() {
+  const nodes = [];
+  const edges = [];
+  let idCounter = 1;
+  function uid() { return 'ci_' + (idCounter++); }
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  function randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+  function randIP() { return `10.${randInt(0,255)}.${randInt(0,255)}.${randInt(1,254)}`; }
+  function randHostname(short, idx) { return `${short.toLowerCase()}-${String(idx).padStart(3,'0')}.corp.local`; }
+  const TAG_POOL = ['критичный','резерв','мониторинг','бэкап','HA','DR','legacy','cloud','on-prem','DMZ','PCI-DSS','core','edge','mgmt','test','pilot'];
+
+  const ciByType = {};
+  const ciCounts = {
+    'ИТ-сервис':20,'ИТ-система':30,'Прикладное ПО':50,
+    'Компонент прикладного ПО':60,'База данных':50,'Кластер':25,
+    'Виртуальное рабочее место':30,'Пул виртуальных рабочих мест':20,
+    'Частная подписка':20,'Виртуальный сервер':80,
+    'Кластер контейнеризации':25,'Публичная подписка':15,
+    'Кластер виртуализации':25,'Сервер':100,'Том/раздел':70,
+    'Сетевое оборудование':50,'Коммутатор SAN':30,'СХД':30,
+    'Шасси':25,'Устройство резервного копирования':20,'Шкаф':30,
+    'ПАК':15,'Оборудование не Банка':15,'Площадка':30,
+    'Кондиционер':25,'ИБП':25,
+  };
+
+  const incidentTitles = [
+    'Недоступность сервиса','Высокая нагрузка CPU','Ошибка репликации БД',
+    'Потеря связности','Сбой авторизации','Переполнение диска',
+    'Таймаут соединения','Ошибка сертификата','Деградация производительности',
+  ];
+
+  CI_TYPE_HIERARCHY.forEach(type => {
+    ciByType[type] = [];
+    const count = ciCounts[type] || 2;
+    for (let i = 0; i < count; i++) {
+      const incCount = randInt(0, 5);
+      const incidents = [];
+      for (let j = 0; j < incCount; j++) {
+        const daysAgo = randInt(0, 30);
+        const d = new Date(); d.setDate(d.getDate() - daysAgo);
+        incidents.push({
+          id: 'INC-' + String(randInt(10000, 99999)),
+          title: pick(incidentTitles),
+          priority: pick(['Критический', 'Высокий', 'Средний', 'Низкий']),
+          date: d.toISOString().slice(0, 10),
+        });
+      }
+      const shortName = SHORT_NAMES[type];
+      const ciName = `${shortName}-${String(i+1).padStart(3,'0')}`;
+      const tagCount = randInt(1, 4);
+      const tags = [];
+      for (let t = 0; t < tagCount; t++) { const tag = pick(TAG_POOL); if (!tags.includes(tag)) tags.push(tag); }
+      const ci = {
+        id: uid(),
+        name: ciName,
+        type, status: pick(STATUSES), environment: pick(ENVIRONMENTS),
+        site: pick(SITES), responsible: pick(RESPONSIBLES),
+        incidents,
+        incidentCount: incCount,
+        sla: pick(SLA_VALUES),
+        dataSource: Math.random() > 0.35 ? 'auto' : 'manual',
+        lastUpdate: new Date(Date.now() - randInt(0, 90) * 86400000).toISOString().slice(0, 10),
+        description: `${type} — ${ciName}`,
+        ip: randIP(),
+        hostname: randHostname(shortName, i+1),
+        tags,
+      };
+      nodes.push(ci);
+      ciByType[type].push(ci);
+    }
+  });
+
+  for (let lvl = 0; lvl < CI_TYPE_HIERARCHY.length - 1; lvl++) {
+    const parents = ciByType[CI_TYPE_HIERARCHY[lvl]];
+    const children = ciByType[CI_TYPE_HIERARCHY[lvl + 1]];
+    if (!parents?.length || !children?.length) continue;
+    children.forEach(child => {
+      const n = Math.min(parents.length, randInt(1, 2));
+      const shuffled = [...parents].sort(() => Math.random() - 0.5);
+      for (let p = 0; p < n; p++) {
+        edges.push({ source: shuffled[p].id, target: child.id, type: 'depends_on', label: 'зависит от' });
+      }
+    });
+  }
+
+  for (let i = 0; i < 80; i++) {
+    const a = randInt(0, CI_TYPE_HIERARCHY.length - 4);
+    const b = a + randInt(2, 3);
+    if (b >= CI_TYPE_HIERARCHY.length) continue;
+    const tA = CI_TYPE_HIERARCHY[a], tB = CI_TYPE_HIERARCHY[b];
+    if (!ciByType[tA]?.length || !ciByType[tB]?.length) continue;
+    edges.push({ source: pick(ciByType[tA]).id, target: pick(ciByType[tB]).id, type: 'influences', label: 'влияет на' });
+  }
+
+  return { nodes, edges };
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3. СТИЛИ
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function injectStyles() {
+  const css = `
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{height:100%;overflow:hidden;font-family:${FONT};background:${COLORS.bg};color:${COLORS.text};font-size:14px}
+
+    /* HEADER */
+    .js-rsm-header{height:52px;background:${COLORS.headerBg};border-bottom:1px solid ${COLORS.border};display:flex;align-items:center;padding:0 20px;gap:12px;z-index:100}
+    .js-rsm-header .logo{font-size:18px;font-weight:700;letter-spacing:2px;color:${COLORS.text};user-select:none}
+    .js-rsm-header .logo span{color:#E53935}
+    .js-rsm-header .title{font-size:15px;font-weight:500;color:${COLORS.textSecondary};border-left:1px solid ${COLORS.border};padding-left:16px;margin-left:4px}
+    .js-rsm-header .spacer{flex:1}
+
+    /* UNDO/REDO */
+    .history-controls{display:flex;gap:2px;align-items:center;margin-right:8px}
+    .history-controls button{width:32px;height:32px;border:1px solid ${COLORS.border};border-radius:6px;background:${COLORS.surface};cursor:pointer;font-size:15px;color:${COLORS.text};display:flex;align-items:center;justify-content:center;transition:all .15s}
+    .history-controls button:hover:not(:disabled){border-color:${COLORS.accent};color:${COLORS.accent}}
+    .history-controls button:disabled{opacity:.3;cursor:default}
+    .history-controls .hist-sep{width:1px;height:20px;background:${COLORS.border};margin:0 4px}
+
+    /* (impact-btn replaced by mode-dropdown) */
+
+    .zoom-controls{display:flex;gap:4px;align-items:center}
+    .zoom-controls button{width:32px;height:32px;border:1px solid ${COLORS.border};border-radius:6px;background:${COLORS.surface};cursor:pointer;font-size:16px;color:${COLORS.text};display:flex;align-items:center;justify-content:center;transition:all .15s}
+    .zoom-controls button:hover{border-color:${COLORS.accent};color:${COLORS.accent}}
+    .zoom-label{font-size:12px;color:${COLORS.textSecondary};min-width:40px;text-align:center}
+
+    /* LAYOUT */
+    .js-rsm-container{display:flex;height:calc(100vh - 52px)}
+
+    /* SIDEBAR */
+    .js-rsm-sidebar{width:320px;min-width:320px;background:${COLORS.sidebarBg};border-right:1px solid ${COLORS.border};display:flex;flex-direction:column;overflow:hidden;transition:width .25s ease,min-width .25s ease,opacity .25s ease}
+    .js-rsm-sidebar.collapsed{width:0;min-width:0;border:none;opacity:0;pointer-events:none}
+    .sidebar-header{padding:14px 16px;border-bottom:1px solid ${COLORS.border};display:flex;align-items:center;gap:8px}
+    .sidebar-header h3{font-size:14px;font-weight:600;flex:1}
+    .sidebar-content{flex:1;overflow-y:auto;padding:12px 16px}
+
+    /* SMART SEARCH */
+    .smart-search{position:relative;margin-bottom:14px}
+    .smart-search input{width:100%;height:38px;border:1px solid ${COLORS.border};border-radius:8px;padding:0 12px 0 36px;font-size:13px;font-family:${FONT};outline:none;transition:border-color .2s}
+    .smart-search input:focus{border-color:${COLORS.accent};box-shadow:0 0 0 3px rgba(0,120,207,.1)}
+    .smart-search .search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:${COLORS.textMuted};font-size:14px;pointer-events:none}
+    .search-hints{position:absolute;top:100%;left:0;right:0;background:${COLORS.surface};border:1px solid ${COLORS.border};border-top:none;border-radius:0 0 8px 8px;z-index:120;display:none;box-shadow:0 4px 12px rgba(0,0,0,.1);max-height:260px;overflow-y:auto}
+    .search-hints.open{display:block}
+    .search-hint-item{padding:8px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
+    .search-hint-item:hover{background:${COLORS.accentBg}}
+    .search-hint-item .hint-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+    .search-hint-item .hint-name{flex:1;font-weight:500}
+    .search-hint-item .hint-type{font-size:10px;color:${COLORS.textMuted}}
+    .search-hint-item .hint-attr{font-size:10px;color:${COLORS.accent};background:${COLORS.accentBg};padding:1px 6px;border-radius:4px}
+    .search-hint-item .hint-meta{font-size:10px;color:${COLORS.textMuted};font-family:monospace;white-space:nowrap}
+    .search-hint-item .hint-tags{font-size:9px;color:${COLORS.accent};background:${COLORS.accentBg};padding:1px 5px;border-radius:3px;white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis}
+    .search-syntax{padding:8px 12px;font-size:11px;color:${COLORS.textMuted};border-bottom:1px solid ${COLORS.border};background:${COLORS.bg}}
+    .search-syntax code{background:${COLORS.surface};padding:1px 4px;border-radius:3px;font-size:10px}
+
+    /* ROOT CI SELECTOR */
+    .root-ci-section{margin-bottom:14px;position:relative}
+    .root-ci-section label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:${COLORS.textSecondary};display:block;margin-bottom:4px}
+    .root-ci-wrap{position:relative}
+    .root-ci-wrap input{width:100%;height:36px;border:1px solid ${COLORS.border};border-radius:6px;padding:0 36px 0 12px;font-size:13px;font-family:${FONT};outline:none;transition:border-color .2s}
+    .root-ci-wrap input:focus{border-color:${COLORS.accent}}
+    .root-ci-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:22px;height:22px;border:none;background:${COLORS.bg};border-radius:4px;cursor:pointer;font-size:12px;color:${COLORS.textMuted};display:none;align-items:center;justify-content:center;transition:all .15s}
+    .root-ci-clear:hover{background:${COLORS.border};color:${COLORS.text}}
+    .root-ci-clear.visible{display:flex}
+    .root-ci-dropdown{position:absolute;top:100%;left:0;right:0;max-height:220px;overflow-y:auto;background:${COLORS.surface};border:1px solid ${COLORS.border};border-top:none;border-radius:0 0 6px 6px;z-index:120;display:none;box-shadow:0 4px 12px rgba(0,0,0,.1)}
+    .root-ci-dropdown.open{display:block}
+    .root-ci-option{padding:6px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .1s}
+    .root-ci-option:hover{background:${COLORS.accentBg}}
+    .root-ci-option .opt-type{font-size:10px;color:${COLORS.textMuted};white-space:nowrap}
+    .root-ci-option .opt-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .root-ci-option .opt-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+    .root-ci-badge{margin-top:6px;display:flex;align-items:center;gap:6px;padding:6px 10px;background:${COLORS.accentBg};border:1px solid ${COLORS.accent};border-radius:6px}
+    .root-ci-badge .badge-name{font-size:12px;font-weight:600;color:${COLORS.accent};flex:1}
+    .root-ci-badge .badge-type{font-size:10px;color:${COLORS.textSecondary};font-weight:400}
+    .root-ci-badge .badge-close{cursor:pointer;font-size:14px;color:${COLORS.accent};opacity:.7;transition:opacity .15s}
+    .root-ci-badge .badge-close:hover{opacity:1}
+
+    /* DIRECTION TOGGLE */
+    .direction-toggle{display:flex;gap:3px;margin-bottom:14px;background:${COLORS.bg};border-radius:8px;padding:3px}
+    .direction-toggle button{flex:1;height:30px;border:none;border-radius:6px;font-size:12px;font-family:${FONT};cursor:pointer;background:transparent;color:${COLORS.textSecondary};font-weight:500;transition:all .2s}
+    .direction-toggle button.active{background:${COLORS.surface};color:${COLORS.accent};box-shadow:0 1px 3px rgba(0,0,0,.1)}
+
+    /* LAYER ZONES */
+    .layer-section{margin-bottom:14px}
+    .layer-zone{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .12s;user-select:none;margin-bottom:2px}
+    .layer-zone:hover{background:${COLORS.accentBg}}
+    .layer-zone input{width:15px;height:15px;accent-color:${COLORS.accent};cursor:pointer;flex-shrink:0}
+    .layer-zone .zone-icon{font-size:14px}
+    .layer-zone .zone-name{flex:1;font-size:12px;font-weight:500}
+    .layer-zone .zone-count{font-size:10px;color:${COLORS.textMuted};background:${COLORS.bg};padding:1px 6px;border-radius:8px}
+
+    /* FILTER SECTION */
+    .filter-section{margin-bottom:12px}
+    .section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:${COLORS.textSecondary};margin-bottom:6px;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;padding:4px 0}
+    .section-title .arrow{font-size:9px;transition:transform .2s;display:inline-block}
+    .section-title .arrow.collapsed{transform:rotate(-90deg)}
+    .section-body{display:flex;flex-direction:column;gap:2px;max-height:300px;overflow-y:auto}
+    .section-body.hidden{display:none}
+
+    .filter-chip{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;cursor:pointer;font-size:12px;transition:background .12s;user-select:none}
+    .filter-chip:hover{background:${COLORS.accentBg}}
+    .filter-chip input[type="checkbox"]{width:15px;height:15px;accent-color:${COLORS.accent};cursor:pointer;flex-shrink:0}
+    .filter-chip .chip-label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .filter-chip .chip-count{font-size:10px;color:${COLORS.textMuted};background:${COLORS.bg};padding:1px 5px;border-radius:8px;min-width:20px;text-align:center}
+    .filter-chip .chip-color{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+    /* SAVED FILTERS / PRESETS */
+    .presets-section{margin-bottom:14px}
+    .sf-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+    .sf-header h4{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:${COLORS.textSecondary};flex:1}
+    .sf-header button{font-size:11px;color:${COLORS.accent};background:none;border:none;cursor:pointer;font-family:${FONT};font-weight:500}
+    .sf-header button:hover{text-decoration:underline}
+    .preset-item{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;transition:background .12s;border:1px solid transparent}
+    .preset-item:hover{background:${COLORS.accentBg};border-color:${COLORS.border}}
+    .preset-item .preset-icon{font-size:13px;flex-shrink:0}
+    .preset-item .preset-info{flex:1;min-width:0}
+    .preset-item .preset-name{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+    .preset-item .preset-desc{font-size:10px;color:${COLORS.textMuted};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+    .preset-item .preset-actions{display:flex;gap:4px;align-items:center;opacity:0;transition:opacity .15s;flex-shrink:0}
+    .preset-item:hover .preset-actions{opacity:1}
+    .preset-item .preset-action{width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;font-size:11px;transition:background .12s,color .12s;color:${COLORS.textMuted}}
+    .preset-item .preset-action:hover{background:${COLORS.accentBg};color:${COLORS.accent}}
+    .preset-item .preset-delete-btn:hover{background:${COLORS.dangerBg};color:${COLORS.danger}}
+    .preset-item .preset-owner{font-size:9px;color:${COLORS.textMuted};display:block;margin-top:1px}
+    .preset-item.is-default .preset-actions{display:none}
+
+    .group-toggle-row{margin-bottom:14px;display:flex;align-items:center;gap:8px;padding:4px 0}
+    .group-toggle-row label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500}
+    .group-toggle-row input{width:15px;height:15px;accent-color:${COLORS.accent}}
+
+    /* DATA SOURCE FILTER */
+    .ds-filter{margin-bottom:14px;display:flex;gap:6px}
+    .ds-chip{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:500;border:1px solid ${COLORS.border};transition:all .15s;user-select:none}
+    .ds-chip:hover{border-color:${COLORS.accent}}
+    .ds-chip.active{background:${COLORS.accentBg};border-color:${COLORS.accent};color:${COLORS.accent}}
+    .ds-chip .ds-icon{font-size:12px}
+
+    .reset-btn{width:100%;height:34px;border:1px solid ${COLORS.border};border-radius:6px;background:${COLORS.surface};color:${COLORS.textSecondary};font-size:12px;font-family:${FONT};cursor:pointer;transition:all .15s;margin-top:6px}
+    .reset-btn:hover{border-color:${COLORS.accent};color:${COLORS.accent}}
+
+    /* MAIN */
+    .js-rsm-main{flex:1;position:relative;overflow:hidden;background:${COLORS.bg}}
+    .js-rsm-cy{width:100%;height:100%}
+
+    #rsm-sidebar-toggle{position:absolute;top:12px;left:12px;z-index:50;width:36px;height:36px;border-radius:8px;border:1px solid ${COLORS.border};background:${COLORS.surface};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;color:${COLORS.text};transition:all .15s;box-shadow:0 2px 4px rgba(0,0,0,.06)}
+    #rsm-sidebar-toggle:hover{border-color:${COLORS.accent};color:${COLORS.accent}}
+
+    /* IMPACT BANNER */
+    .js-rsm-impact-banner{position:absolute;top:12px;left:56px;z-index:55;background:${COLORS.dangerBg};border:1px solid ${COLORS.danger};border-radius:8px;padding:8px 14px;display:none;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.1);font-size:12px;flex-wrap:wrap}
+    .js-rsm-impact-banner.visible{display:flex}
+    .js-rsm-impact-banner .impact-info{font-weight:500;color:${COLORS.danger}}
+    .js-rsm-impact-banner .impact-count{font-weight:700}
+    .js-rsm-impact-banner .impact-exit{border:none;background:${COLORS.danger};color:#fff;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:11px;font-family:${FONT};font-weight:500;transition:opacity .15s}
+    .js-rsm-impact-banner .impact-exit:hover{opacity:.85}
+    .impact-chain-toggle{display:flex;gap:2px;background:${COLORS.bg};border:1px solid ${COLORS.border};border-radius:5px;padding:2px;margin-left:4px}
+    .impact-chain-toggle .ict-btn{border:none;background:transparent;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:10px;font-family:${FONT};font-weight:500;color:${COLORS.textSecondary};transition:all .15s;white-space:nowrap}
+    .impact-chain-toggle .ict-btn.active{background:${COLORS.danger};color:#fff}
+    .impact-chain-toggle .ict-btn:hover:not(.active){background:${COLORS.dangerBg};color:${COLORS.danger}}
+
+    /* CONTEXT PANEL (slide-in from right) */
+    .js-rsm-context-panel{position:absolute;top:0;right:0;width:380px;height:100%;background:${COLORS.surface};border-left:1px solid ${COLORS.border};box-shadow:-4px 0 20px rgba(0,0,0,.08);z-index:70;transform:translateX(100%);transition:transform .3s ease;overflow-y:auto}
+    .js-rsm-context-panel.open{transform:translateX(0)}
+    .ctx-header{display:flex;align-items:center;padding:16px 18px;border-bottom:1px solid ${COLORS.border};gap:10px;position:sticky;top:0;background:${COLORS.surface};z-index:1}
+    .ctx-header .ctx-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+    .ctx-header .ctx-title-area{flex:1;min-width:0}
+    .ctx-header .ctx-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ctx-header .ctx-type{font-size:11px;color:${COLORS.textSecondary}}
+    .ctx-header .ctx-close{width:30px;height:30px;border:none;background:${COLORS.bg};border-radius:6px;cursor:pointer;font-size:14px;color:${COLORS.textSecondary};display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+    .ctx-header .ctx-close:hover{background:${COLORS.border};color:${COLORS.text}}
+
+    .ctx-section{padding:14px 18px;border-bottom:1px solid ${COLORS.border}}
+    .ctx-section:last-child{border-bottom:none}
+    .ctx-section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:${COLORS.textSecondary};margin-bottom:10px;display:flex;align-items:center;gap:6px}
+    .ctx-row{display:flex;margin-bottom:8px}
+    .ctx-label{width:120px;font-size:12px;color:${COLORS.textSecondary};font-weight:500;padding-top:1px;flex-shrink:0}
+    .ctx-value{flex:1;font-size:13px;color:${COLORS.text}}
+    .ctx-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+    .ctx-badge.auto{background:rgba(21,101,192,.1);color:${COLORS.autoSource}}
+    .ctx-badge.manual{background:rgba(123,31,162,.1);color:${COLORS.manualSource}}
+    .ctx-badge.status-active{background:${COLORS.successBg};color:${COLORS.success}}
+    .ctx-badge.status-warning{background:${COLORS.warningBg};color:${COLORS.warning}}
+    .ctx-badge.status-danger{background:${COLORS.dangerBg};color:${COLORS.danger}}
+
+    .ctx-actions{display:flex;gap:6px;padding:14px 18px;border-bottom:1px solid ${COLORS.border}}
+    .ctx-action-btn{flex:1;height:34px;border:1px solid ${COLORS.border};border-radius:6px;background:${COLORS.surface};cursor:pointer;font-size:12px;font-family:${FONT};color:${COLORS.text};font-weight:500;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px}
+    .ctx-action-btn:hover{border-color:${COLORS.accent};color:${COLORS.accent}}
+    .ctx-action-btn.primary{background:${COLORS.accent};color:#fff;border-color:${COLORS.accent}}
+    .ctx-action-btn.primary:hover{background:#005FA3}
+    .ctx-action-btn.danger{color:${COLORS.danger};border-color:${COLORS.danger}}
+    .ctx-action-btn.danger:hover{background:${COLORS.dangerBg}}
+
+    /* INCIDENT LIST */
+    .incident-item{padding:8px 10px;border:1px solid ${COLORS.border};border-radius:6px;margin-bottom:6px;transition:background .12s}
+    .incident-item:hover{background:${COLORS.bg}}
+    .incident-item .inc-header{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+    .incident-item .inc-id{font-size:11px;font-weight:600;color:${COLORS.accent}}
+    .incident-item .inc-priority{font-size:10px;padding:1px 6px;border-radius:3px;font-weight:500}
+    .inc-priority.crit{background:${COLORS.dangerBg};color:${COLORS.danger}}
+    .inc-priority.high{background:${COLORS.warningBg};color:${COLORS.warning}}
+    .inc-priority.med{background:${COLORS.accentBg};color:${COLORS.accent}}
+    .inc-priority.low{background:${COLORS.bg};color:${COLORS.textSecondary}}
+    .incident-item .inc-title{font-size:12px;color:${COLORS.text}}
+    .incident-item .inc-date{font-size:10px;color:${COLORS.textMuted};margin-top:2px}
+
+    /* STATS */
+    #rsm-stats{position:absolute;bottom:12px;left:12px;z-index:50;background:${COLORS.surface};border:1px solid ${COLORS.border};border-radius:8px;padding:6px 14px;font-size:11px;color:${COLORS.textSecondary};box-shadow:0 2px 4px rgba(0,0,0,.06);display:flex;gap:12px}
+    #rsm-stats span{font-weight:600;color:${COLORS.text}}
+
+    /* LEGEND */
+    .legend-section{margin-top:12px;padding-top:12px;border-top:1px solid ${COLORS.border}}
+    .legend-item{display:flex;align-items:center;gap:8px;padding:2px 0;font-size:11px;color:${COLORS.textSecondary}}
+    .legend-line{width:24px;height:2px;position:relative}
+    .legend-line::after{content:'';position:absolute;right:-1px;top:-3px;border:4px solid transparent;border-left:6px solid}
+    .legend-line.depends{background:${COLORS.edge}}
+    .legend-line.depends::after{border-left-color:${COLORS.edge}}
+    .legend-line.influences{background:${COLORS.accentLight}}
+    .legend-line.influences::after{border-left-color:${COLORS.accentLight}}
+    .legend-line.transitive{background:repeating-linear-gradient(90deg,${COLORS.transitiveEdge} 0,${COLORS.transitiveEdge} 4px,transparent 4px,transparent 7px);height:2px}
+    .legend-line.transitive::after{border-left-color:${COLORS.transitiveEdge}}
+    .legend-line.impact{background:${COLORS.impactEdge}}
+    .legend-line.impact::after{border-left-color:${COLORS.impactEdge}}
+
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:${COLORS.border};border-radius:3px}
+    ::-webkit-scrollbar-thumb:hover{background:${COLORS.textMuted}}
+
+    /* MODAL */
+    .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.3);z-index:200;display:flex;align-items:center;justify-content:center}
+    .modal-box{background:${COLORS.surface};border-radius:10px;padding:24px;width:380px;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+    .modal-box h3{font-size:15px;font-weight:600;margin-bottom:14px}
+    .modal-box input,.modal-box textarea{width:100%;border:1px solid ${COLORS.border};border-radius:6px;padding:0 12px;font-size:13px;font-family:${FONT};outline:none;margin-bottom:10px}
+    .modal-box input{height:38px}
+    .modal-box textarea{height:60px;padding:8px 12px;resize:vertical}
+    .modal-box input:focus,.modal-box textarea:focus{border-color:${COLORS.accent}}
+    .modal-actions{display:flex;gap:8px;justify-content:flex-end}
+    .modal-actions button{height:34px;padding:0 18px;border-radius:6px;font-size:12px;font-family:${FONT};cursor:pointer;font-weight:500;transition:all .15s}
+    .btn-cancel{border:1px solid ${COLORS.border};background:${COLORS.surface};color:${COLORS.textSecondary}}
+    .btn-cancel:hover{border-color:${COLORS.text};color:${COLORS.text}}
+    .btn-save{border:none;background:${COLORS.accent};color:#fff}
+    .btn-save:hover{background:#005FA3}
+
+    .cy-tooltip{position:absolute;z-index:100;background:${COLORS.text};color:#fff;padding:5px 10px;border-radius:5px;font-size:11px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+
+    /* MINIMAP */
+    .js-rsm-minimap{position:absolute;bottom:12px;right:12px;z-index:55;width:200px;height:150px;background:${COLORS.surface};border:1px solid ${COLORS.border};border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);overflow:hidden;cursor:crosshair;transition:opacity .2s}
+    #rsm-minimap:hover{box-shadow:0 4px 16px rgba(0,0,0,.15)}
+    .js-rsm-minimap canvas{width:100%;height:100%;display:block}
+    .js-rsm-minimap .minimap-label{position:absolute;top:4px;left:8px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:${COLORS.textMuted};pointer-events:none;user-select:none}
+    .js-rsm-minimap .minimap-toggle{position:absolute;top:3px;right:5px;width:18px;height:18px;border:none;background:transparent;cursor:pointer;font-size:10px;color:${COLORS.textMuted};display:flex;align-items:center;justify-content:center;border-radius:3px;transition:all .15s}
+    .js-rsm-minimap .minimap-toggle:hover{background:${COLORS.bg};color:${COLORS.text}}
+    .js-rsm-minimap.minimized{width:80px;height:24px;cursor:pointer}
+    .js-rsm-minimap.minimized canvas{display:none}
+    .js-rsm-minimap.minimized .minimap-label{top:5px;left:10px}
+
+    /* DATA SOURCE MARKER on nodes */
+    .ds-marker{position:absolute;font-size:8px;bottom:-2px;right:-2px}
+
+    /* RIGHT-CLICK CONTEXT MENU */
+    .js-rsm-ctx-menu{position:absolute;z-index:200;background:${COLORS.surface};border:1px solid ${COLORS.border};border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:4px 0;min-width:220px;display:none;font-family:${FONT};animation:ctxFadeIn .12s ease}
+    @keyframes ctxFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+    .js-rsm-ctx-menu.visible{display:block}
+    .ctx-menu-item{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:13px;color:${COLORS.text};cursor:pointer;transition:background .1s,color .1s;user-select:none}
+    .ctx-menu-item:hover{background:${COLORS.accentBg};color:${COLORS.accent}}
+    .ctx-menu-item .ctx-menu-icon{width:20px;text-align:center;font-size:14px;flex-shrink:0}
+    .ctx-menu-item .ctx-menu-label{flex:1}
+    .ctx-menu-item .ctx-menu-hint{font-size:10px;color:${COLORS.textMuted};margin-left:auto}
+    .ctx-menu-divider{height:1px;background:${COLORS.border};margin:4px 0}
+    .ctx-menu-header{padding:8px 16px 4px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:${COLORS.textMuted};user-select:none}
+
+    /* FOCUS TREE TOGGLE */
+    .focus-tree-toggle{display:flex;gap:3px;margin-bottom:14px;background:${COLORS.bg};border-radius:8px;padding:3px}
+    .focus-tree-toggle button{flex:1;height:30px;border:none;border-radius:6px;font-size:11px;font-family:${FONT};cursor:pointer;background:transparent;color:${COLORS.textSecondary};font-weight:500;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:5px}
+    .focus-tree-toggle button.active{background:${COLORS.surface};color:${COLORS.accent};box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .focus-tree-toggle button .ft-icon{font-size:13px}
+
+    /* IMPACT PATH NAVIGATOR */
+    .js-rsm-impact-paths{position:absolute;top:56px;left:56px;z-index:55;background:${COLORS.surface};border:1px solid ${COLORS.border};border-radius:10px;padding:0;width:340px;max-height:50vh;display:none;box-shadow:0 4px 20px rgba(0,0,0,.12);font-size:12px;overflow:hidden}
+    .js-rsm-impact-paths.visible{display:flex;flex-direction:column}
+    .impact-paths-header{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid ${COLORS.border};gap:8px}
+    .impact-paths-header h4{flex:1;font-size:12px;font-weight:600;color:${COLORS.text}}
+    .impact-paths-header .paths-nav{display:flex;gap:4px}
+    .impact-paths-header .paths-nav button{width:26px;height:26px;border:1px solid ${COLORS.border};border-radius:5px;background:${COLORS.surface};cursor:pointer;font-size:12px;color:${COLORS.text};display:flex;align-items:center;justify-content:center;transition:all .12s}
+    .impact-paths-header .paths-nav button:hover{border-color:${COLORS.accent};color:${COLORS.accent}}
+    .impact-paths-header .paths-nav button:disabled{opacity:.3;cursor:default}
+    .impact-paths-close{width:24px;height:24px;border:none;background:${COLORS.bg};border-radius:5px;cursor:pointer;font-size:12px;color:${COLORS.textMuted};display:flex;align-items:center;justify-content:center;transition:all .12s}
+    .impact-paths-close:hover{background:${COLORS.border};color:${COLORS.text}}
+    .impact-paths-list{overflow-y:auto;max-height:calc(50vh - 48px);padding:6px 0}
+    .impact-path-item{padding:8px 14px;cursor:pointer;transition:background .1s;border-left:3px solid transparent}
+    .impact-path-item:hover{background:${COLORS.accentBg}}
+    .impact-path-item.active{background:${COLORS.dangerBg};border-left-color:${COLORS.danger}}
+    .impact-path-item .path-target{font-weight:600;font-size:12px;color:${COLORS.text};margin-bottom:3px;display:flex;align-items:center;gap:6px}
+    .impact-path-item .path-target .path-sla{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:500}
+    .impact-path-item .path-chain{font-size:10px;color:${COLORS.textMuted};line-height:1.5;word-break:break-all}
+    .impact-path-item .path-chain .path-arrow{color:${COLORS.danger};font-weight:700;margin:0 3px}
+    .impact-path-item .path-depth{font-size:10px;color:${COLORS.textMuted};margin-top:2px}
+
+    /* MODE DROPDOWN */
+    .mode-dropdown{position:relative}
+    .mode-dropdown-trigger{height:32px;padding:0 10px 0 12px;border:1px solid ${COLORS.border};border-radius:6px;background:${COLORS.surface};cursor:pointer;font-size:12px;font-family:${FONT};color:${COLORS.text};display:flex;align-items:center;gap:6px;transition:all .15s;font-weight:500}
+    .mode-dropdown-trigger:hover{border-color:${COLORS.accent};color:${COLORS.accent}}
+    .mode-dropdown-trigger.active-model{background:${COLORS.accentBg};border-color:${COLORS.accent};color:${COLORS.accent}}
+    .mode-dropdown-trigger.active-impact{background:${COLORS.dangerBg};border-color:${COLORS.danger};color:${COLORS.danger}}
+    .mode-dropdown-trigger .mode-icon{font-size:14px}
+    .mode-dropdown-trigger .mode-arrow{font-size:10px;margin-left:2px;transition:transform .2s}
+    .mode-dropdown.open .mode-dropdown-trigger .mode-arrow{transform:rotate(180deg)}
+    .mode-dropdown-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:300px;background:${COLORS.surface};border:1px solid ${COLORS.border};border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.12);z-index:200;display:none;overflow:hidden}
+    .mode-dropdown.open .mode-dropdown-menu{display:block}
+    .mode-option{padding:12px 16px;cursor:pointer;transition:background .12s;border-bottom:1px solid ${COLORS.bg}}
+    .mode-option:last-child{border-bottom:none}
+    .mode-option:hover{background:${COLORS.bg}}
+    .mode-option.selected{background:${COLORS.accentBg}}
+    .mode-option.selected.impact-selected{background:${COLORS.dangerBg}}
+    .mode-option-header{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+    .mode-option-icon{font-size:18px;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .mode-option-icon.model-icon{background:${COLORS.accentBg};color:${COLORS.accent}}
+    .mode-option-icon.impact-icon{background:${COLORS.dangerBg};color:${COLORS.danger}}
+    .mode-option-title{font-size:13px;font-weight:600;color:${COLORS.text}}
+    .mode-option-desc{font-size:11px;color:${COLORS.textSecondary};line-height:1.5;margin-left:36px}
+    .mode-option-check{margin-left:auto;font-size:14px;color:${COLORS.accent};display:none}
+    .mode-option.selected .mode-option-check{display:block}
+    .mode-option.selected.impact-selected .mode-option-check{color:${COLORS.danger}}
+
+    /* SLA HEATMAP LEGEND */
+    .sla-legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .sla-legend-item{display:flex;align-items:center;gap:4px;font-size:10px;color:${COLORS.textSecondary}}
+    .sla-legend-dot{width:10px;height:10px;border-radius:2px}
+
+    /* EXPORT BUTTONS */
+    .export-controls{display:flex;gap:4px;align-items:center}
+    .export-btn{height:32px;padding:0 10px;border:1px solid ${COLORS.border};border-radius:6px;background:${COLORS.surface};cursor:pointer;font-size:11px;font-family:${FONT};color:${COLORS.text};display:flex;align-items:center;gap:5px;transition:all .15s;font-weight:500}
+    .export-btn:hover{border-color:${COLORS.accent};color:${COLORS.accent}}
+    .export-btn .export-icon{font-size:13px}
+
+    /* UPSTREAM SERVICES in context panel */
+    .upstream-svc-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:6px}
+    .upstream-svc-table th{text-align:left;font-weight:600;color:${COLORS.textSecondary};padding:4px 6px;border-bottom:1px solid ${COLORS.border};font-size:10px;text-transform:uppercase;letter-spacing:.3px}
+    .upstream-svc-table td{padding:5px 6px;border-bottom:1px solid ${COLORS.bg};color:${COLORS.text};cursor:pointer}
+    .upstream-svc-table tr:hover td{background:${COLORS.accentBg}}
+    .upstream-svc-table .svc-sla{font-weight:600;font-size:10px;padding:1px 5px;border-radius:3px}
+
+    /* DIFF MODE */
+    .diff-btn{height:32px;padding:0 12px;border:1px solid ${COLORS.border};border-radius:6px;background:${COLORS.surface};cursor:pointer;font-size:12px;font-family:${FONT};color:${COLORS.text};display:flex;align-items:center;gap:6px;transition:all .15s;font-weight:500}
+    .diff-btn:hover{border-color:#7B1FA2;color:#7B1FA2}
+    .diff-btn.active{background:#F3E5F5;border-color:#7B1FA2;color:#7B1FA2}
+    .diff-btn .diff-icon{font-size:14px}
+
+    /* Snapshot Modal */
+    .js-rsm-snapshot-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);align-items:center;justify-content:center}
+    .js-rsm-snapshot-modal.visible{display:flex}
+    .snapshot-dialog{background:${COLORS.surface};border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.2);width:560px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+    .snapshot-dialog-header{padding:20px 24px 16px;border-bottom:1px solid ${COLORS.border};display:flex;align-items:center;justify-content:space-between}
+    .snapshot-dialog-header h3{font-size:16px;font-weight:600;color:${COLORS.text};display:flex;align-items:center;gap:8px}
+    .snapshot-dialog-close{width:28px;height:28px;border:none;background:none;cursor:pointer;font-size:16px;color:${COLORS.textSecondary};border-radius:6px;display:flex;align-items:center;justify-content:center}
+    .snapshot-dialog-close:hover{background:${COLORS.bg};color:${COLORS.text}}
+    .snapshot-dialog-body{padding:16px 24px;overflow-y:auto;flex:1}
+    .snapshot-dialog-footer{padding:16px 24px;border-top:1px solid ${COLORS.border};display:flex;gap:8px;justify-content:flex-end}
+    .snap-action-btn{height:36px;padding:0 16px;border:1px solid ${COLORS.border};border-radius:8px;background:${COLORS.surface};cursor:pointer;font-size:13px;font-family:${FONT};color:${COLORS.text};font-weight:500;transition:all .15s}
+    .snap-action-btn:hover{border-color:${COLORS.accent};color:${COLORS.accent}}
+    .snap-action-btn.primary{background:#7B1FA2;color:#fff;border-color:#7B1FA2}
+    .snap-action-btn.primary:hover{background:#6A1B9A}
+    .snap-action-btn.danger{color:${COLORS.danger};border-color:${COLORS.danger}}
+    .snap-action-btn.danger:hover{background:${COLORS.dangerBg}}
+
+    /* Snapshot list */
+    .snap-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+    .snap-item{display:flex;align-items:center;gap:12px;padding:12px;border:2px solid ${COLORS.border};border-radius:8px;cursor:pointer;transition:all .15s}
+    .snap-item:hover{border-color:#CE93D8;background:#FAFAFA}
+    .snap-item.selected{border-color:#7B1FA2;background:#F3E5F5}
+    .snap-item.snap-base{border-style:dashed}
+    .snap-item .snap-radio{width:18px;height:18px;border:2px solid ${COLORS.border};border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+    .snap-item.selected .snap-radio{border-color:#7B1FA2}
+    .snap-item.selected .snap-radio::after{content:'';width:10px;height:10px;border-radius:50%;background:#7B1FA2}
+    .snap-info{flex:1;min-width:0}
+    .snap-name{font-weight:600;font-size:13px;color:${COLORS.text}}
+    .snap-meta{font-size:11px;color:${COLORS.textSecondary};margin-top:2px}
+    .snap-stats{font-size:11px;color:${COLORS.textMuted};margin-top:2px}
+    .snap-delete{width:24px;height:24px;border:none;background:none;cursor:pointer;font-size:12px;color:${COLORS.textMuted};border-radius:4px;display:flex;align-items:center;justify-content:center;opacity:0;transition:all .15s}
+    .snap-item:hover .snap-delete{opacity:1}
+    .snap-delete:hover{background:${COLORS.dangerBg};color:${COLORS.danger}}
+    .snap-empty{text-align:center;padding:24px;color:${COLORS.textSecondary};font-size:13px}
+    .snap-section-label{font-size:11px;font-weight:600;color:${COLORS.textSecondary};text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px}
+
+    /* Diff Banner */
+    .js-rsm-diff-banner{display:none;position:absolute;top:0;left:0;right:0;height:44px;background:linear-gradient(135deg,#F3E5F5,#E1BEE7);border-bottom:2px solid #CE93D8;z-index:50;align-items:center;padding:0 20px;gap:12px;font-size:13px;color:#4A148C;font-weight:500}
+    .js-rsm-diff-banner.visible{display:flex}
+    .diff-banner-info{flex:1;display:flex;align-items:center;gap:8px}
+    .diff-stat{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600}
+    .diff-stat.added{background:#C8E6C9;color:#2E7D32}
+    .diff-stat.removed{background:#FFCDD2;color:#C62828}
+    .diff-stat.changed{background:#FFF9C4;color:#F57F17}
+    .diff-stat.unchanged{background:#E0E0E0;color:#616161}
+    .diff-exit{height:28px;padding:0 12px;border:1px solid #CE93D8;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;font-family:${FONT};color:#7B1FA2;font-weight:500;transition:all .15s}
+    .diff-exit:hover{background:#F3E5F5}
+
+    /* Diff Legend */
+    .js-rsm-diff-legend{display:none;position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:${COLORS.surface};border:1px solid ${COLORS.border};border-radius:8px;padding:8px 16px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:50;gap:16px;align-items:center;font-size:12px}
+    .js-rsm-diff-legend.visible{display:flex}
+    .diff-legend-item{display:flex;align-items:center;gap:6px}
+    .diff-legend-dot{width:12px;height:12px;border-radius:3px}
+  `;
+  const s = document.createElement('style');
+  s.textContent = css;
+  document.head.appendChild(s);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4. DOM
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function buildDOM() {
+  document.body.innerHTML = `
+    <div class="js-rsm-header">
+      <div class="logo">SIMPLE<span>●</span>NE</div>
+      <div class="title">Ресурсно-сервисная модель</div>
+      <div class="spacer"></div>
+      <div class="history-controls">
+        <button class="js-btn-undo" title="Отменить (Ctrl+Z)" disabled>↩</button>
+        <button class="js-btn-redo" title="Повторить (Ctrl+Y)" disabled>↪</button>
+      </div>
+      <div class="mode-dropdown" class="js-mode-dropdown">
+        <button class="mode-dropdown-trigger" class="js-mode-trigger">
+          <span class="mode-icon" class="js-mode-trigger-icon">◉</span>
+          <span class="js-mode-trigger-label">Режимы</span>
+          <span class="mode-arrow">▾</span>
+        </button>
+        <div class="mode-dropdown-menu" class="js-mode-menu">
+          <div class="mode-option" class="js-mode-opt-model" data-mode="model">
+            <div class="mode-option-header">
+              <div class="mode-option-icon model-icon">🔷</div>
+              <div class="mode-option-title">Модель системы</div>
+              <div class="mode-option-check">✓</div>
+            </div>
+            <div class="mode-option-desc">Выберите ИТ-сервис и постройте дерево зависимостей сверху вниз — от сервиса к инфраструктуре</div>
+          </div>
+          <div class="mode-option" class="js-mode-opt-impact" data-mode="impact">
+            <div class="mode-option-header">
+              <div class="mode-option-icon impact-icon">⚡</div>
+              <div class="mode-option-title">Анализ влияния</div>
+              <div class="mode-option-check">✓</div>
+            </div>
+            <div class="mode-option-desc">Выберите КЕ инфраструктуры и определите, на какие сервисы она влияет снизу вверх</div>
+          </div>
+        </div>
+      </div>
+      <div class="export-controls">
+        <button class="export-btn" class="js-btn-export-png" title="Экспорт в PNG">
+          <span class="export-icon">📷</span> PNG
+        </button>
+        <button class="export-btn" class="js-btn-export-csv" title="Экспорт в CSV">
+          <span class="export-icon">📊</span> CSV
+        </button>
+      </div>
+      <button class="diff-btn" class="js-btn-diff" title="Сравнение снимков модели">
+        <span class="diff-icon">🔀</span> Diff
+      </button>
+      <div class="zoom-controls">
+        <button class="js-zoom-out" title="Уменьшить">−</button>
+        <span class="zoom-label" class="js-zoom-label">100%</span>
+        <button class="js-zoom-in" title="Увеличить">+</button>
+        <button class="js-zoom-fit" title="Вписать в экран">⊡</button>
+      </div>
+    </div>
+    <div class="js-rsm-container">
+      <div class="js-rsm-sidebar">
+        <div class="sidebar-header"><h3>Фильтры и настройки</h3></div>
+        <div class="sidebar-content" class="js-sidebar-content"></div>
+      </div>
+      <div class="js-rsm-main">
+        <button class="js-rsm-sidebar-toggle" title="Панель фильтров">☰</button>
+        <div class="js-rsm-impact-banner">
+          <span class="impact-info">⚡ Impact-анализ: затронуто <span class="impact-count" class="js-impact-count">0</span> CI</span>
+          <div class="impact-chain-toggle" class="js-impact-chain-toggle">
+            <button class="ict-btn active" data-mode="full" title="Показать все промежуточные слои">🔗 Полная цепочка</button>
+            <button class="ict-btn" data-mode="filtered" title="Показать только выбранные типы CI">🎯 Только выбранные</button>
+          </div>
+          <button class="impact-exit" class="js-impact-exit">Выйти</button>
+        </div>
+        <div class="js-rsm-impact-paths">
+          <div class="impact-paths-header">
+            <h4>🔗 Цепочки влияния <span class="js-impact-paths-count"></span></h4>
+            <div class="paths-nav">
+              <button class="js-path-prev" title="Предыдущая цепочка" disabled>◀</button>
+              <button class="js-path-next" title="Следующая цепочка" disabled>▶</button>
+            </div>
+            <button class="impact-paths-close" class="js-impact-paths-close" title="Закрыть">✕</button>
+          </div>
+          <div class="impact-paths-list" class="js-impact-paths-list"></div>
+        </div>
+
+        <div class="js-rsm-cy"></div>
+        <div class="js-rsm-context-panel">
+          <div class="ctx-header">
+            <div class="ctx-icon" class="js-ctx-icon"></div>
+            <div class="ctx-title-area">
+              <div class="ctx-name" class="js-ctx-name">—</div>
+              <div class="ctx-type" class="js-ctx-type">—</div>
+            </div>
+            <button class="ctx-close" class="js-ctx-close">✕</button>
+          </div>
+          <div class="js-ctx-body"></div>
+        </div>
+        <div class="js-rsm-minimap">
+          <canvas class="js-minimap-canvas"></canvas>
+          <span class="minimap-label">Карта</span>
+          <button class="minimap-toggle" class="js-minimap-toggle" title="Свернуть/развернуть">−</button>
+        </div>
+        <div class="js-rsm-ctx-menu">
+          <div class="ctx-menu-header" class="js-ctx-menu-title">CI</div>
+          <div class="ctx-menu-item" class="js-ctx-menu-build-from">
+            <span class="ctx-menu-icon">🔍</span>
+            <span class="ctx-menu-label">Построить модель от</span>
+          </div>
+          <div class="ctx-menu-item" class="js-ctx-menu-incidents">
+            <span class="ctx-menu-icon">🔔</span>
+            <span class="ctx-menu-label">Показать инциденты</span>
+            <span class="ctx-menu-hint" class="js-ctx-menu-inc-count"></span>
+          </div>
+          <div class="ctx-menu-divider"></div>
+          <div class="ctx-menu-item" class="js-ctx-menu-impact">
+            <span class="ctx-menu-icon">⚡</span>
+            <span class="ctx-menu-label">Impact-анализ</span>
+          </div>
+          <div class="ctx-menu-item" class="js-ctx-menu-details">
+            <span class="ctx-menu-icon">📋</span>
+            <span class="ctx-menu-label">Подробности</span>
+          </div>
+          <div class="ctx-menu-item" class="js-ctx-menu-copy-id">
+            <span class="ctx-menu-icon">📎</span>
+            <span class="ctx-menu-label">Копировать ID</span>
+          </div>
+        </div>
+        <div class="js-rsm-diff-banner">
+          <div class="diff-banner-info">
+            <span>🔀 Сравнение снимков:</span>
+            <span class="js-diff-snap-names"></span>
+            <span>—</span>
+            <span class="diff-stat added" class="js-diff-added">+0 новых</span>
+            <span class="diff-stat removed" class="js-diff-removed">−0 удалённых</span>
+            <span class="diff-stat changed" class="js-diff-changed">~0 изменённых</span>
+            <span class="diff-stat unchanged" class="js-diff-unchanged">0 без изменений</span>
+          </div>
+          <button class="diff-exit" class="js-diff-exit">Выйти</button>
+        </div>
+        <div class="js-rsm-diff-legend">
+          <div class="diff-legend-item"><div class="diff-legend-dot" style="background:#43A047"></div> Добавлен</div>
+          <div class="diff-legend-item"><div class="diff-legend-dot" style="background:#E53935"></div> Удалён</div>
+          <div class="diff-legend-item"><div class="diff-legend-dot" style="background:#F9A825"></div> Изменён</div>
+          <div class="diff-legend-item"><div class="diff-legend-dot" style="background:#BDBDBD"></div> Без изменений</div>
+        </div>
+        <div class="js-rsm-snapshot-modal">
+          <div class="snapshot-dialog">
+            <div class="snapshot-dialog-header">
+              <h3>📸 Снимки модели</h3>
+              <button class="snapshot-dialog-close" class="js-snap-modal-close">✕</button>
+            </div>
+            <div class="snapshot-dialog-body" class="js-snap-modal-body"></div>
+            <div class="snapshot-dialog-footer">
+              <button class="snap-action-btn" class="js-snap-btn-save">📸 Сохранить текущий снимок</button>
+              <button class="snap-action-btn primary" class="js-snap-btn-compare" disabled>🔀 Сравнить выбранные</button>
+            </div>
+          </div>
+        </div>
+        <div class="js-rsm-stats">
+          Узлов: <span class="js-stat-nodes">0</span> &nbsp;|&nbsp;
+          Связей: <span class="js-stat-edges">0</span> &nbsp;|&nbsp;
+          Отображено: <span class="js-stat-visible">0</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5. ПРИЛОЖЕНИЕ
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+class RSMApp {
+  constructor() {
+    this.data = generateMockData();
+    this.cy = null;
+    this.direction = 'top-down';
+    this.filters = {
+      types: new Set(CI_TYPE_HIERARCHY),
+      statuses: new Set(STATUSES),
+      sites: new Set(SITES),
+      environments: new Set(ENVIRONMENTS),
+    };
+    this.savedFilters = this._loadSaved();
+    this.searchQuery = '';
+    this.groupMode = true;
+    this.expandedGroups = new Set();
+    this.selectedNode = null;
+    this.rootCI = null;
+    this._rootSearchQuery = '';
+    this._filterDebounce = null;
+    this._filteredCache = null;
+    this._filteredCacheDirty = true;
+    this._nodeIndex = new Map();
+    this.data.nodes.forEach(n => this._nodeIndex.set(n.id, n));
+    this._adjacency = this._buildAdjacency();
+    this._minimapCanvas = null;
+    this._minimapCtx = null;
+    this._minimapMinimized = false;
+    this._minimapRAF = null;
+    this._layoutWorker = this._createLayoutWorker();
+
+    // v4.0: New state
+    this._history = [];       // Undo stack
+    this._future = [];        // Redo stack
+    this._historyMax = 50;
+    this._skipHistory = false; // Flag to skip recording during undo/redo
+    this.impactMode = false;
+    this.impactSourceId = null;
+    this.impactAffected = new Set();
+    this.impactChainMode = 'full'; // 'full' = show all intermediate types, 'filtered' = only user-selected types
+    this.activeMode = null; // null | 'model' | 'impact'
+    this.collapsedLayers = new Set(); // Collapsed zone IDs
+    this.dataSourceFilter = 'all'; // 'all', 'auto', 'manual'
+    this.focusTreeMode = false; // Focus tree: show only one direction
+    this.slaHeatmap = false; // SLA heatmap mode
+    this._impactPaths = []; // Reconstructed paths for Impact Path Navigator
+    this._impactCurrentPath = -1; // Currently highlighted path index
+    this._impactBfsParent = null; // BFS parent map for path reconstruction
+    this._preImpactExpandedGroups = null; // Saved groups before impact auto-expand
+
+    // v5.1: Diff / Snapshot comparison
+    this._snapshots = this._loadSnapshots();
+    this._diffMode = false;
+    this._diffResult = null; // { added, removed, changed, unchanged }
+    this._diffSelectedSnaps = []; // [snapId1, snapId2] for comparison
+  }
+
+  init() {
+    injectStyles();
+    buildDOM();
+    this._buildSidebar();
+    this._initCy();
+    this._bindHeader();
+    this._bindSidebar();
+    this._bindKeyboard();
+    this._initMinimap();
+    this._bindCtxMenuActions();
+    this._recordHistory(); // Record initial state
+    this._loadSharedPresetFromURL(); // Check for shared preset in URL
+    if (!this.rootCI) this._showQuickActions();
+    console.log('[RSM] Initialized. Nodes:', this.data.nodes.length, '| Edges:', this.data.edges.length);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     HISTORY (UNDO / REDO)
+     ═══════════════════════════════════════════════════════════════════════ */
+  _getStateSnapshot() {
+    return {
+      types: [...this.filters.types],
+      statuses: [...this.filters.statuses],
+      sites: [...this.filters.sites],
+      environments: [...this.filters.environments],
+      direction: this.direction,
+      groupMode: this.groupMode,
+      expandedGroups: [...this.expandedGroups],
+      rootCI: this.rootCI,
+      searchQuery: this.searchQuery,
+      collapsedLayers: [...this.collapsedLayers],
+      dataSourceFilter: this.dataSourceFilter,
+      focusTreeMode: this.focusTreeMode,
+    };
+  }
+
+  _applyStateSnapshot(snap) {
+    this.filters.types = new Set(snap.types);
+    this.filters.statuses = new Set(snap.statuses);
+    this.filters.sites = new Set(snap.sites);
+    this.filters.environments = new Set(snap.environments);
+    this.direction = snap.direction;
+    this.groupMode = snap.groupMode;
+    this.expandedGroups = new Set(snap.expandedGroups);
+    this.rootCI = snap.rootCI;
+    this.searchQuery = snap.searchQuery || '';
+    this.collapsedLayers = new Set(snap.collapsedLayers || []);
+    this.dataSourceFilter = snap.dataSourceFilter || 'all';
+    this.focusTreeMode = snap.focusTreeMode || false;
+  }
+
+  _recordHistory() {
+    if (this._skipHistory) return;
+    const snap = this._getStateSnapshot();
+    this._history.push(JSON.stringify(snap));
+    if (this._history.length > this._historyMax) this._history.shift();
+    this._future = []; // Clear redo stack on new action
+    this._updateHistoryButtons();
+  }
+
+  _undo() {
+    if (this._history.length <= 1) return; // Need at least 2 states (current + previous)
+    this._future.push(this._history.pop()); // Move current to future
+    const prev = JSON.parse(this._history[this._history.length - 1]);
+    this._skipHistory = true;
+    this._applyStateSnapshot(prev);
+    this._buildSidebar();
+    this._bindSidebar();
+    this._refresh();
+    this._skipHistory = false;
+    this._updateHistoryButtons();
+  }
+
+  _redo() {
+    if (this._future.length === 0) return;
+    const next = JSON.parse(this._future.pop());
+    this._history.push(JSON.stringify(next));
+    this._skipHistory = true;
+    this._applyStateSnapshot(next);
+    this._buildSidebar();
+    this._bindSidebar();
+    this._refresh();
+    this._skipHistory = false;
+    this._updateHistoryButtons();
+  }
+
+  _updateHistoryButtons() {
+    const undo = document.querySelector('.js-btn-undo');
+    const redo = document.querySelector('.js-btn-redo');
+    if (undo) undo.disabled = this._history.length <= 1;
+    if (redo) redo.disabled = this._future.length === 0;
+  }
+
+  _bindKeyboard() {
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        this._undo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        this._redo();
+      }
+      if (e.key === 'Escape') {
+        if (this.impactMode) this._exitImpactMode();
+        this._closeContextPanel();
+        this._hideCtxMenu();
+        this._hideImpactPaths();
+      }
+    });
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     IMPACT ANALYSIS
+     ═══════════════════════════════════════════════════════════════════════ */
+  _toggleImpactMode() {
+    // Legacy method - now delegates to mode management
+    if (this.activeMode === 'impact') {
+      this._activateMode('impact'); // Will deactivate since same mode
+    } else {
+      this._activateMode('impact');
+    }
+  }
+
+  _runImpactAnalysis(ciId) {
+    if (!this.cy) return;
+    this.impactSourceId = ciId;
+    this.impactAffected = new Set();
+
+    // Show loading overlay for large graphs
+    const main = document.querySelector('.js-rsm-main');
+    let loadEl = document.querySelector('.js-rsm-impact-loading');
+    if (!loadEl) {
+      loadEl = document.createElement('div');
+      loadEl.id = 'rsm-impact-loading';
+      loadEl.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(244,245,247,.85);z-index:60;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;font-family:${FONT}`;
+      loadEl.innerHTML = `<div style="font-size:14px;color:${COLORS.textSecondary}">Анализ влияния...</div><div style="font-size:11px;color:${COLORS.textMuted}" class="js-impact-progress"></div>`;
+      main.appendChild(loadEl);
+    }
+    loadEl.style.display = 'flex';
+    const progressEl = document.querySelector('.js-impact-progress');
+
+    // === PRE-IMPACT: Save current type filters ===
+    if (!this._preImpactTypeFilters) {
+      this._preImpactTypeFilters = new Set(this.filters.types);
+    }
+
+    if (this.impactChainMode === 'full') {
+      // FULL CHAIN MODE: auto-expand type filters to show all intermediate layers
+      // Run a preliminary BFS on the full adjacency graph to discover all affected types
+      const preQueue = [ciId];
+      const preVisited = new Set([ciId]);
+      const preDepthMap = new Map([[ciId, 0]]);
+      while (preQueue.length) {
+        const cur = preQueue.shift();
+        const entry = this._adjacency[cur];
+        if (!entry) continue;
+        const curDepth = preDepthMap.get(cur);
+        if (curDepth >= IMPACT_MAX_DEPTH) continue;
+        for (const parent of entry.parents) {
+          if (!preVisited.has(parent)) {
+            if (preVisited.size >= IMPACT_MAX_NODES + 1) break;
+            preVisited.add(parent);
+            preDepthMap.set(parent, curDepth + 1);
+            preQueue.push(parent);
+          }
+        }
+      }
+      // Add types of all affected nodes to the type filter
+      let filtersChanged = false;
+      preVisited.forEach(id => {
+        const nd = this._nodeIndex.get(id);
+        if (nd && !this.filters.types.has(nd.type)) {
+          this.filters.types.add(nd.type);
+          filtersChanged = true;
+        }
+      });
+      // If filters changed, rebuild graph elements before running impact
+      if (filtersChanged) {
+        this._invalidateFilterCache();
+        this.cy.startBatch();
+        this.cy.elements().remove();
+        const els = this._buildElements();
+        this.cy.add(els);
+        this.cy.endBatch();
+        this._runLayout(false);
+        this._buildSidebar();
+        this._bindSidebar();
+      }
+    } else {
+      // FILTERED MODE: restore original user filters (only show selected types)
+      this.filters.types = new Set(this._preImpactTypeFilters);
+      this._invalidateFilterCache();
+      this.cy.startBatch();
+      this.cy.elements().remove();
+      const els = this._buildElements();
+      this.cy.add(els);
+      this.cy.endBatch();
+      this._runLayout(false);
+      this._buildSidebar();
+      this._bindSidebar();
+    }
+
+    // Use requestAnimationFrame to allow the loading overlay to render
+    requestAnimationFrame(() => {
+      this._runImpactAnalysisCore(ciId, progressEl, loadEl);
+    });
+  }
+
+  _runImpactAnalysisCore(ciId, progressEl, loadEl) {
+    // === PHASE 1: BFS with depth & node limits ===
+    const queue = [ciId];
+    const visited = new Set([ciId]);
+    const depthMap = new Map([[ciId, 0]]);
+    const bfsParent = new Map();
+    let truncated = false;
+
+    while (queue.length) {
+      const cur = queue.shift();
+      const entry = this._adjacency[cur];
+      if (!entry) continue;
+      const curDepth = depthMap.get(cur);
+      if (curDepth >= IMPACT_MAX_DEPTH) continue; // depth limit
+      for (const parent of entry.parents) {
+        if (!visited.has(parent)) {
+          if (this.impactAffected.size >= IMPACT_MAX_NODES) { truncated = true; break; }
+          visited.add(parent);
+          depthMap.set(parent, curDepth + 1);
+          bfsParent.set(parent, cur);
+          this.impactAffected.add(parent);
+          queue.push(parent);
+        }
+      }
+      if (truncated) break;
+    }
+
+    // === PHASE 2: Build chain edges from BFS parent map (O(n), not O(n*depth)) ===
+    const chainEdges = [];
+    const addedChainKeys = new Set();
+
+    // Each BFS parent entry IS one chain edge — no need to trace full paths
+    bfsParent.forEach((fromNode, toNode) => {
+      if (addedChainKeys.size >= IMPACT_MAX_CHAIN_EDGES) return;
+      let visSource = fromNode;
+      let visTarget = toNode;
+      if (this.groupMode) {
+        const fromData = this._nodeIndex.get(fromNode);
+        const toData = this._nodeIndex.get(toNode);
+        if (fromData && !this.expandedGroups.has(fromData.type)) visSource = 'g_' + fromData.type;
+        if (toData && !this.expandedGroups.has(toData.type)) visTarget = 'g_' + toData.type;
+      }
+      if (visSource !== visTarget) {
+        // Safety check: ensure both source and target nodes exist in the graph
+        if (this.cy.getElementById(visSource).length === 0 || this.cy.getElementById(visTarget).length === 0) return;
+        const key = visSource + '->' + visTarget;
+        if (!addedChainKeys.has(key)) {
+          addedChainKeys.add(key);
+          chainEdges.push({
+            group: 'edges',
+            data: { id: 'impact_chain_' + key, source: visSource, target: visTarget, edgeType: 'impact_chain' },
+            classes: 'impact-chain-edge',
+          });
+        }
+      }
+    });
+
+    // === PHASE 3: Apply visual styles in a single batch ===
+    this.cy.startBatch();
+
+    // Remove old impact chain edges
+    this.cy.edges('.impact-chain-edge').remove();
+    this.cy.elements().removeClass('impact-source impact-affected impact-affected-deep impact-faded impact-edge');
+
+    // Fade everything
+    this.cy.elements().addClass('impact-faded');
+
+    // Build lookup sets for fast edge matching
+    const affectedAndSource = new Set([ciId, ...this.impactAffected]);
+    const affectedTypes = new Set();
+    const srcData = this._nodeIndex.get(ciId);
+    if (srcData) affectedTypes.add(srcData.type);
+
+    // Highlight source
+    const sourceNode = this.cy.getElementById(ciId);
+    if (sourceNode.length) {
+      sourceNode.removeClass('impact-faded').addClass('impact-source');
+    } else if (this.groupMode) {
+      if (srcData) {
+        const gNode = this.cy.getElementById('g_' + srcData.type);
+        if (gNode.length) gNode.removeClass('impact-faded').addClass('impact-source');
+      }
+    }
+
+    // Highlight affected nodes
+    this.impactAffected.forEach(id => {
+      const nd = this._nodeIndex.get(id);
+      if (nd) affectedTypes.add(nd.type);
+      const node = this.cy.getElementById(id);
+      if (node.length) {
+        const depth = depthMap.get(id) || 1;
+        node.removeClass('impact-faded').addClass(depth <= 2 ? 'impact-affected' : 'impact-affected-deep');
+      }
+      if (nd && this.groupMode && !this.expandedGroups.has(nd.type)) {
+        const gNode = this.cy.getElementById('g_' + nd.type);
+        if (gNode.length) gNode.removeClass('impact-faded').addClass('impact-affected');
+      }
+    });
+
+    // Highlight existing edges between affected nodes (use filter instead of forEach)
+    this.cy.edges().filter(edge => {
+      const src = edge.source().id();
+      const tgt = edge.target().id();
+      let srcIn = affectedAndSource.has(src);
+      let tgtIn = affectedAndSource.has(tgt);
+      if (!srcIn && src.startsWith('g_')) srcIn = affectedTypes.has(src.slice(2));
+      if (!tgtIn && tgt.startsWith('g_')) tgtIn = affectedTypes.has(tgt.slice(2));
+      return srcIn && tgtIn;
+    }).removeClass('impact-faded').addClass('impact-edge');
+
+    // Add chain edges
+    if (chainEdges.length > 0) {
+      this.cy.add(chainEdges);
+      this.cy.edges('.impact-chain-edge').removeClass('impact-faded').addClass('impact-edge');
+    }
+
+    this.cy.endBatch();
+
+    // Hide loading overlay
+    if (loadEl) loadEl.style.display = 'none';
+
+    // === PHASE 4: Auto-expand groups that contain affected nodes ===
+    if (this.groupMode && this.impactAffected.size > 0) {
+      this._preImpactExpandedGroups = new Set(this.expandedGroups);
+      const activeTypes = this.filters.types;
+      this.impactAffected.forEach(id => {
+        const nd = this._nodeIndex.get(id);
+        if (nd && activeTypes.has(nd.type)) this.expandedGroups.add(nd.type);
+      });
+      const srcNd = this._nodeIndex.get(ciId);
+      if (srcNd && activeTypes.has(srcNd.type)) this.expandedGroups.add(srcNd.type);
+      // Re-render with expanded groups but keep impact styles
+      // We need to rebuild elements and re-apply impact
+      if (loadEl) loadEl.style.display = 'flex';
+      if (progressEl) progressEl.textContent = 'Раскрытие групп...';
+      this.cy.startBatch();
+      this.cy.elements().remove();
+      const els = this._buildElements();
+      this.cy.add(els);
+      this.cy.endBatch();
+      this._runLayout(false);
+      // Re-apply impact styles after layout (longer timeout for large graphs)
+      const reapplyDelay = this.impactAffected.size > 100 ? 800 : 400;
+      setTimeout(() => {
+        this._reapplyImpactStyles(ciId, depthMap, bfsParent, chainEdges, affectedAndSource, affectedTypes);
+        if (loadEl) loadEl.style.display = 'none';
+      }, reapplyDelay);
+    }
+
+    // Show banner
+    const chainCount = addedChainKeys.size;
+    const banner = document.querySelector('.js-rsm-impact-banner');
+    const infoSpan = banner.querySelector('.impact-info');
+    if (infoSpan) {
+      let text = `\u26a1 Impact-\u0430\u043d\u0430\u043b\u0438\u0437: \u0437\u0430\u0442\u0440\u043e\u043d\u0443\u0442\u043e <span class="impact-count" class="js-impact-count">${this.impactAffected.size}</span> CI, <span class="impact-count">${chainCount}</span> \u0441\u0432\u044f\u0437\u0435\u0439 \u0432\u043b\u0438\u044f\u043d\u0438\u044f`;
+      if (truncated) {
+        text += ` <span style="color:${COLORS.warning};font-weight:600">(\u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0435\u043d\u043e: \u0433\u043b\u0443\u0431\u0438\u043d\u0430 ${IMPACT_MAX_DEPTH}, \u043c\u0430\u043a\u0441 ${IMPACT_MAX_NODES} CI)</span>`;
+      }
+      if (this.impactChainMode === 'filtered') {
+        text += ` <span style="color:${COLORS.accent};font-weight:500">(\u0442\u043e\u043b\u044c\u043a\u043e \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0435 \u0442\u0438\u043f\u044b)</span>`;
+      }
+      infoSpan.innerHTML = text;
+    }
+    // Update toggle active state
+    document.querySelectorAll('#impact-chain-toggle .ict-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === this.impactChainMode);
+    });
+    banner.classList.add('visible');
+
+    // === PHASE 5: Show Impact Path Navigator ===
+    this._showImpactPaths(bfsParent, ciId);
+  }
+
+  _reapplyImpactStyles(ciId, depthMap, bfsParent, chainEdges, affectedAndSource, affectedTypes) {
+    if (!this.cy) return;
+    this.cy.startBatch();
+    this.cy.elements().addClass('impact-faded').removeClass('impact-source impact-affected impact-affected-deep impact-edge');
+    // Source
+    const sourceNode = this.cy.getElementById(ciId);
+    if (sourceNode.length) sourceNode.removeClass('impact-faded').addClass('impact-source');
+    // Affected
+    this.impactAffected.forEach(id => {
+      const node = this.cy.getElementById(id);
+      if (node.length) {
+        const depth = depthMap.get(id) || 1;
+        node.removeClass('impact-faded').addClass(depth <= 2 ? 'impact-affected' : 'impact-affected-deep');
+      }
+    });
+    // Edges
+    this.cy.edges().filter(edge => {
+      const src = edge.source().id();
+      const tgt = edge.target().id();
+      return affectedAndSource.has(src) && affectedAndSource.has(tgt);
+    }).removeClass('impact-faded').addClass('impact-edge');
+    // Re-add chain edges
+    this.cy.edges('.impact-chain-edge').remove();
+    if (chainEdges.length > 0) {
+      // Rebuild chain edges for expanded view
+      const newChainEdges = [];
+      const addedKeys = new Set();
+      bfsParent.forEach((fromNode, toNode) => {
+        if (addedKeys.size >= IMPACT_MAX_CHAIN_EDGES) return;
+        // Safety check: ensure both nodes exist in the graph
+        if (this.cy.getElementById(fromNode).length === 0 || this.cy.getElementById(toNode).length === 0) return;
+        const key = fromNode + '->' + toNode;
+        if (!addedKeys.has(key)) {
+          addedKeys.add(key);
+          newChainEdges.push({
+            group: 'edges',
+            data: { id: 'impact_chain_' + key, source: fromNode, target: toNode, edgeType: 'impact_chain' },
+            classes: 'impact-chain-edge',
+          });
+        }
+      });
+      this.cy.add(newChainEdges);
+      this.cy.edges('.impact-chain-edge').removeClass('impact-faded').addClass('impact-edge');
+    }
+    this.cy.endBatch();
+  }
+
+  _exitImpactMode() {
+    this.impactMode = false;
+    this.impactSourceId = null;
+    this.impactAffected.clear();
+    this.impactChainMode = 'full'; // Reset to default
+    // Reset toggle UI
+    document.querySelectorAll('#impact-chain-toggle .ict-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === 'full');
+    });
+    this.activeMode = null;
+    this._updateModeUI();
+    document.querySelector('.js-rsm-impact-banner').classList.remove('visible');
+    // Reset banner text
+    const infoSpan = document.querySelector('.js-rsm-impact-banner .impact-info');
+    if (infoSpan) {
+      infoSpan.innerHTML = `\u26a1 Impact-\u0430\u043d\u0430\u043b\u0438\u0437: \u0437\u0430\u0442\u0440\u043e\u043d\u0443\u0442\u043e <span class="impact-count" class="js-impact-count">0</span> CI`;
+    }
+    // Hide Impact Path Navigator
+    this._hideImpactPaths();
+    // Restore pre-impact expanded groups
+    if (this._preImpactExpandedGroups) {
+      this.expandedGroups = this._preImpactExpandedGroups;
+      this._preImpactExpandedGroups = null;
+    }
+    // Restore pre-impact type filters
+    if (this._preImpactTypeFilters) {
+      this.filters.types = this._preImpactTypeFilters;
+      this._preImpactTypeFilters = null;
+      this._invalidateFilterCache();
+      // Rebuild sidebar to reflect restored filters
+      this._buildSidebar();
+      this._bindSidebar();
+    }
+    if (this.cy) {
+      this.cy.startBatch();
+      // Remove dedicated impact chain edges
+      this.cy.edges('.impact-chain-edge').remove();
+      this.cy.elements().removeClass('impact-source impact-affected impact-affected-deep impact-faded impact-edge');
+      this.cy.endBatch();
+      // Rebuild with restored groups and filters
+      this._refresh();
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     ADJACENCY & BFS
+     ═══════════════════════════════════════════════════════════════════════ */
+  _buildAdjacency() {
+    const adj = {};
+    this.data.nodes.forEach(n => { adj[n.id] = { parents: new Set(), children: new Set() }; });
+    this.data.edges.forEach(e => {
+      if (adj[e.source]) adj[e.source].children.add(e.target);
+      if (adj[e.target]) adj[e.target].parents.add(e.source);
+    });
+    return adj;
+  }
+
+  _getReachableFromRoot(rootId) {
+    const reachable = new Set([rootId]);
+    // Focus Tree Mode: restrict traversal direction
+    const goDown = !this.focusTreeMode || this.focusTreeMode === 'down';
+    const goUp = !this.focusTreeMode || this.focusTreeMode === 'up';
+    if (goDown) {
+      const qDown = [rootId];
+      while (qDown.length) {
+        const cur = qDown.shift();
+        const entry = this._adjacency[cur];
+        if (!entry) continue;
+        for (const child of entry.children) {
+          if (!reachable.has(child)) { reachable.add(child); qDown.push(child); }
+        }
+      }
+    }
+    if (goUp) {
+      const qUp = [rootId];
+      while (qUp.length) {
+        const cur = qUp.shift();
+        const entry = this._adjacency[cur];
+        if (!entry) continue;
+        for (const parent of entry.parents) {
+          if (!reachable.has(parent)) { reachable.add(parent); qUp.push(parent); }
+        }
+      }
+    }
+    return reachable;
+  }
+
+  _computeTransitiveEdges(visibleIds) {
+    const visSet = new Set(visibleIds);
+    const transitiveEdges = [];
+    const allTypesActive = CI_TYPE_HIERARCHY.every(t => this.filters.types.has(t));
+    if (allTypesActive && this.collapsedLayers.size === 0) return transitiveEdges;
+
+    // Build hidden set
+    const hiddenIds = new Set();
+    const allNodes = this.data.nodes;
+    for (let i = 0; i < allNodes.length; i++) {
+      if (!visSet.has(allNodes[i].id)) hiddenIds.add(allNodes[i].id);
+    }
+    if (hiddenIds.size === 0) return transitiveEdges;
+
+    // Build direct edge index for O(1) lookup
+    if (!this._directEdgeIndex) {
+      this._directEdgeIndex = new Set();
+      this.data.edges.forEach(e => this._directEdgeIndex.add(e.source + '→' + e.target));
+    }
+    const directIdx = this._directEdgeIndex;
+    const seen = new Set();
+    const MAX_BFS_DEPTH = 10; // prevent deep BFS chains
+
+    for (const startId of visSet) {
+      const entry = this._adjacency[startId];
+      if (!entry || entry.children.size === 0) continue;
+      // BFS through hidden nodes to find transitive targets
+      const queue = [];
+      for (const child of entry.children) queue.push({ id: child, depth: 1 });
+      const visited = new Set([startId]);
+      while (queue.length) {
+        const { id: cur, depth } = queue.shift();
+        if (visited.has(cur)) continue;
+        visited.add(cur);
+        if (visSet.has(cur)) {
+          if (!directIdx.has(startId + '→' + cur)) {
+            const key = startId + '→' + cur;
+            if (!seen.has(key)) {
+              seen.add(key);
+              transitiveEdges.push({ source: startId, target: cur, type: 'transitive', label: 'транзитивная связь' });
+            }
+          }
+        } else if (hiddenIds.has(cur) && depth < MAX_BFS_DEPTH) {
+          const curEntry = this._adjacency[cur];
+          if (curEntry) {
+            for (const child of curEntry.children) {
+              if (!visited.has(child)) queue.push({ id: child, depth: depth + 1 });
+            }
+          }
+        }
+      }
+    }
+    return transitiveEdges;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     SIDEBAR BUILD
+     ═══════════════════════════════════════════════════════════════════════ */
+  _buildSidebar() {
+    const c = document.querySelector('.js-sidebar-content');
+    if (!c) return;
+    c.innerHTML = '';
+
+    // Smart Search
+    c.insertAdjacentHTML('beforeend', `
+      <div class="smart-search">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="js-rsm-search" placeholder="Поиск: имя, IP, хост, тег, тип:сервер..." value="${this._esc(this.searchQuery)}">
+        <div class="search-hints" class="js-search-hints"></div>
+      </div>
+    `);
+
+    // Root CI selector
+    c.insertAdjacentHTML('beforeend', `
+      <div class="root-ci-section">
+        <label>Корневой CI (построить модель от)</label>
+        <div class="root-ci-wrap">
+          <input type="text" class="js-root-ci-input" placeholder="Введите имя CI..." autocomplete="off">
+          <button class="root-ci-clear ${this.rootCI ? 'visible' : ''}" class="js-root-ci-clear">✕</button>
+        </div>
+        <div class="root-ci-dropdown" class="js-root-ci-dropdown"></div>
+        <div class="js-root-ci-badge-area"></div>
+      </div>
+    `);
+    this._renderRootBadge();
+
+    // Direction
+    c.insertAdjacentHTML('beforeend', `
+      <div class="direction-toggle">
+        <button class="js-dir-td" class="${this.direction==='top-down'?'active':''}">↓ Сверху вниз</button>
+        <button class="js-dir-bu" class="${this.direction==='bottom-up'?'active':''}">↑ Снизу вверх</button>
+      </div>
+    `);
+
+    // Focus Tree Mode toggle
+    c.insertAdjacentHTML('beforeend', `
+      <div class="focus-tree-toggle">
+        <button class="js-ft-off" class="${!this.focusTreeMode?'active':''}"><span class="ft-icon">🔗</span> Все связи</button>
+        <button class="js-ft-down" class="${this.focusTreeMode==='down'?'active':''}"><span class="ft-icon">🔽</span> Дерево вниз</button>
+        <button class="js-ft-up" class="${this.focusTreeMode==='up'?'active':''}"><span class="ft-icon">🔼</span> Дерево вверх</button>
+      </div>
+    `);
+
+    // Group toggle
+    c.insertAdjacentHTML('beforeend', `
+      <div class="group-toggle-row">
+        <label><input type="checkbox" class="js-group-toggle" ${this.groupMode?'checked':''}> Группировка по типам</label>
+      </div>
+    `);
+
+    // SLA Heatmap toggle
+    c.insertAdjacentHTML('beforeend', `
+      <div class="group-toggle-row">
+        <label><input type="checkbox" class="js-sla-heatmap-toggle" ${this.slaHeatmap?'checked':''}> SLA Heatmap</label>
+      </div>
+    `);
+    if (this.slaHeatmap) {
+      let slaLegendHTML = '<div class="sla-legend">';
+      Object.entries(SLA_HEATMAP).forEach(([val, cfg]) => {
+        slaLegendHTML += `<div class="sla-legend-item"><div class="sla-legend-dot" style="background:${cfg.color}"></div>${val}</div>`;
+      });
+      slaLegendHTML += '</div>';
+      c.insertAdjacentHTML('beforeend', slaLegendHTML);
+    }
+
+    // Layer Zones (Collapsible)
+    let layerHTML = '<div class="layer-section"><div class="section-title" data-sec="layers"><span class="arrow" data-sec="layers">▼</span> Слои (зонирование)</div><div class="section-body" data-sec="layers">';
+    LAYER_ZONES.forEach(zone => {
+      const typeCount = zone.types.reduce((sum, t) => sum + (this.data.nodes.filter(n => n.type === t).length), 0);
+      const checked = !this.collapsedLayers.has(zone.id) ? 'checked' : '';
+      layerHTML += `<label class="layer-zone"><input type="checkbox" ${checked} data-zone="${zone.id}"><span class="zone-icon">${zone.icon}</span><span class="zone-name">${zone.name}</span><span class="zone-count">${typeCount}</span></label>`;
+    });
+    layerHTML += '</div></div>';
+    c.insertAdjacentHTML('beforeend', layerHTML);
+
+    // Data Source Filter
+    c.insertAdjacentHTML('beforeend', `
+      <div class="section-title" style="margin-bottom:6px"><span class="arrow">▼</span> Источник данных</div>
+      <div class="ds-filter">
+        <div class="ds-chip ${this.dataSourceFilter==='all'?'active':''}" data-ds="all">Все</div>
+        <div class="ds-chip ${this.dataSourceFilter==='auto'?'active':''}" data-ds="auto"><span class="ds-icon">⚡</span> Авто</div>
+        <div class="ds-chip ${this.dataSourceFilter==='manual'?'active':''}" data-ds="manual"><span class="ds-icon">✏️</span> Ручной</div>
+      </div>
+    `);
+
+    // Presets
+    c.insertAdjacentHTML('beforeend', `<div class="js-sf-section"></div>`);
+    this._renderPresets();
+
+    // Filters
+    c.insertAdjacentHTML('beforeend', this._filterHTML('f-types','Типы CI', CI_TYPE_HIERARCHY, this.filters.types, true));
+    c.insertAdjacentHTML('beforeend', this._filterHTML('f-stat','Статус', STATUSES, this.filters.statuses));
+    c.insertAdjacentHTML('beforeend', this._filterHTML('f-site','Площадка', SITES, this.filters.sites));
+    c.insertAdjacentHTML('beforeend', this._filterHTML('f-env','Окружение', ENVIRONMENTS, this.filters.environments));
+
+    // Reset + Legend
+    c.insertAdjacentHTML('beforeend', `<button class="reset-btn" class="js-reset-filters">Сбросить все фильтры</button>`);
+    c.insertAdjacentHTML('beforeend', `
+      <div class="legend-section">
+        <div class="section-title">Легенда</div>
+        <div class="legend-item"><div class="legend-line depends"></div> зависит от</div>
+        <div class="legend-item"><div class="legend-line influences"></div> влияет на</div>
+        <div class="legend-item"><div class="legend-line transitive"></div> транзитивная связь</div>
+        <div class="legend-item"><div class="legend-line impact"></div> цепочка влияния (impact)</div>
+        <div class="legend-item" style="gap:6px"><span style="font-size:12px">⚡</span> авто-обновление</div>
+        <div class="legend-item" style="gap:6px"><span style="font-size:12px">✏️</span> ручное обновление</div>
+      </div>
+    `);
+  }
+
+  _renderRootBadge() {
+    const area = document.querySelector('.js-root-ci-badge-area');
+    if (!area) return;
+    if (!this.rootCI) { area.innerHTML = ''; return; }
+    const n = this._nodeIndex.get(this.rootCI);
+    if (!n) { area.innerHTML = ''; return; }
+    area.innerHTML = `
+      <div class="root-ci-badge">
+        <span class="badge-name">${this._esc(n.name)}</span>
+        <span class="badge-type">${this._esc(n.type)}</span>
+        <span class="badge-close" class="js-root-badge-close">✕</span>
+      </div>
+    `;
+  }
+
+  _filterHTML(id, title, items, activeSet, colors=false) {
+    if (!this._countCache) {
+      this._countCache = { types:{}, statuses:{}, sites:{}, environments:{} };
+      this.data.nodes.forEach(n => {
+        this._countCache.types[n.type] = (this._countCache.types[n.type]||0) + 1;
+        this._countCache.statuses[n.status] = (this._countCache.statuses[n.status]||0) + 1;
+        this._countCache.sites[n.site] = (this._countCache.sites[n.site]||0) + 1;
+        this._countCache.environments[n.environment] = (this._countCache.environments[n.environment]||0) + 1;
+      });
+    }
+    const cacheMap = {'f-types':'types','f-stat':'statuses','f-site':'sites','f-env':'environments'};
+    const counts = this._countCache[cacheMap[id]] || {};
+    let h = `<div class="filter-section"><div class="section-title" data-sec="${id}"><span class="arrow" data-sec="${id}">▼</span> ${title}</div><div class="section-body" data-sec="${id}">`;
+    items.forEach(item => {
+      const ck = activeSet.has(item) ? 'checked' : '';
+      const dot = colors ? `<span class="chip-color" style="background:${CI_TYPE_COLORS[item]}"></span>` : '';
+      h += `<label class="filter-chip"><input type="checkbox" ${ck} data-fid="${id}" data-val="${item}">${dot}<span class="chip-label">${item}</span><span class="chip-count">${counts[item]||0}</span></label>`;
+    });
+    h += '</div></div>';
+    return h;
+  }
+
+  _renderPresets() {
+    const el = document.querySelector('.js-sf-section');
+    if (!el) return;
+    const allPresets = [...DEFAULT_PRESETS.map(p => ({...p, isDefault: true})), ...this.savedFilters.map(p => ({...p, isDefault: false}))];
+    let h = `<div class="presets-section"><div class="sf-header"><h4>Пресеты фильтров</h4><button class="js-save-btn">+ Сохранить текущий</button></div>`;
+    allPresets.forEach((p, i) => {
+      const isDefault = i < DEFAULT_PRESETS.length;
+      const userIdx = i - DEFAULT_PRESETS.length;
+      const ownerLabel = p.owner ? this._esc(p.owner) : (isDefault ? 'Системный' : 'Мой');
+      const isShared = !!p.shared;
+      h += `<div class="preset-item ${isDefault?'is-default':''}" data-pi="${i}" data-user-idx="${userIdx}">
+        <span class="preset-icon">${isDefault ? '📋' : (isShared ? '🌐' : '💾')}</span>
+        <div class="preset-info">
+          <span class="preset-name">${this._esc(p.name)}</span>
+          ${p.desc ? `<span class="preset-desc">${this._esc(p.desc)}</span>` : ''}
+          <span class="preset-owner">${ownerLabel}</span>
+        </div>
+        <div class="preset-actions">
+          ${!isDefault ? `<span class="preset-action" data-action="rename" data-sd="${userIdx}" title="Переименовать">✏️</span>` : ''}
+          ${!isDefault ? `<span class="preset-action" data-action="share" data-sd="${userIdx}" title="Поделиться ссылкой">🔗</span>` : ''}
+          ${!isDefault ? `<span class="preset-action preset-delete-btn" data-action="delete" data-sd="${userIdx}" title="Удалить">✕</span>` : ''}
+        </div>
+      </div>`;
+    });
+    h += '</div>';
+    el.innerHTML = h;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     SMART SEARCH
+     ═══════════════════════════════════════════════════════════════════════ */
+  _parseSmartSearch(query) {
+    const result = { text: '', attrs: {} };
+    const attrPattern = /([\wа-яА-ЯёЁ]+):([^\s]+)/g;
+    let match;
+    let remaining = query;
+    while ((match = attrPattern.exec(query)) !== null) {
+      const key = match[1].toLowerCase();
+      const val = match[2].toLowerCase();
+      const keyMap = { 'тип':'type', 'type':'type', 'статус':'status', 'status':'status',
+        'площадка':'site', 'site':'site', 'окружение':'environment', 'env':'environment',
+        'ответственный':'responsible', 'responsible':'responsible', 'источник':'dataSource', 'source':'dataSource',
+        'ip':'ip', 'адрес':'ip', 'hostname':'hostname', 'хост':'hostname',
+        'тег':'tags', 'tag':'tags', 'tags':'tags', 'теги':'tags',
+        'sla':'sla', 'id':'id' };
+      if (keyMap[key]) {
+        result.attrs[keyMap[key]] = val;
+      }
+      remaining = remaining.replace(match[0], '');
+    }
+    result.text = remaining.trim().toLowerCase();
+    return result;
+  }
+
+  _smartSearchNodes(query) {
+    if (!query.trim()) return [];
+    const parsed = this._parseSmartSearch(query);
+    let matches = this.data.nodes;
+
+    // Filter by structured attributes
+    Object.entries(parsed.attrs).forEach(([key, val]) => {
+      matches = matches.filter(n => {
+        if (key === 'tags') {
+          return (n.tags || []).some(t => t.toLowerCase().includes(val));
+        }
+        const nodeVal = (n[key] || '').toLowerCase();
+        return nodeVal.includes(val);
+      });
+    });
+
+    // Full-text search across ALL fields
+    if (parsed.text) {
+      const t = parsed.text;
+      matches = matches.filter(n =>
+        n.name.toLowerCase().includes(t) ||
+        n.type.toLowerCase().includes(t) ||
+        n.status.toLowerCase().includes(t) ||
+        n.site.toLowerCase().includes(t) ||
+        n.responsible.toLowerCase().includes(t) ||
+        (n.ip || '').toLowerCase().includes(t) ||
+        (n.hostname || '').toLowerCase().includes(t) ||
+        (n.tags || []).some(tag => tag.toLowerCase().includes(t)) ||
+        (n.sla || '').toLowerCase().includes(t) ||
+        (n.environment || '').toLowerCase().includes(t) ||
+        (n.description || '').toLowerCase().includes(t) ||
+        (n.id || '').toLowerCase().includes(t)
+      );
+    }
+
+    return matches.slice(0, 50);
+  }
+
+  _updateSearchHints(query) {
+    const hints = document.querySelector('.js-search-hints');
+    if (!hints) return;
+    if (!query.trim()) {
+      hints.classList.remove('open');
+      return;
+    }
+    const matches = this._smartSearchNodes(query);
+    if (!matches.length) {
+      hints.innerHTML = `<div class="search-syntax">Синтаксис: <code>тип:сервер</code> <code>статус:активен</code> <code>ip:10.0</code> <code>хост:srv</code> <code>тег:core</code> или свободный текст</div>
+        <div style="padding:8px 12px;font-size:12px;color:${COLORS.textMuted}">Ничего не найдено</div>`;
+      hints.classList.add('open');
+      return;
+    }
+    let h = `<div class="search-syntax">Найдено: ${matches.length}${matches.length >= 50 ? '+' : ''} CI. Синтаксис: <code>тип:сервер</code> <code>ip:10.0</code> <code>хост:srv</code> <code>тег:core</code></div>`;
+    matches.forEach(n => {
+      const tagsStr = (n.tags || []).slice(0, 2).join(', ');
+      h += `<div class="search-hint-item" data-hint-class="js-${n.id}">
+        <span class="hint-dot" style="background:${CI_TYPE_COLORS[n.type]}"></span>
+        <span class="hint-name">${this._esc(n.name)}</span>
+        <span class="hint-type">${this._esc(n.type)}</span>
+        <span class="hint-meta">${this._esc(n.ip || '')}</span>
+        ${tagsStr ? `<span class="hint-tags">${this._esc(tagsStr)}</span>` : ''}
+      </div>`;
+    });
+    hints.innerHTML = h;
+    hints.classList.add('open');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     CYTOSCAPE
+     ═══════════════════════════════════════════════════════════════════════ */
+  _initCy() {
+    this.cy = cytoscape({
+      container: document.querySelector('.js-rsm-cy'),
+      elements: this._buildElements(),
+      style: this._cyStyle(),
+      layout: { name: 'preset' },
+      minZoom: 0.05, maxZoom: 4,
+      wheelSensitivity: 0.25,
+      boxSelectionEnabled: false,
+      textureOnViewport: true,
+      hideEdgesOnViewport: true,
+      hideLabelsOnViewport: true,
+    });
+    this._runLayout(false);
+    this._bindCyEvents();
+    this._updateStats();
+  }
+
+  _buildElements() {
+    const els = [];
+    const vis = this._getFiltered();
+    const visIds = new Set(vis.map(n => n.id));
+    const idx = this._nodeIndex;
+    const transitiveEdges = this._computeTransitiveEdges([...visIds]);
+
+    if (this.groupMode) {
+      const byType = {};
+      vis.forEach(n => { (byType[n.type] = byType[n.type] || []).push(n); });
+      const hier = this.direction === 'top-down' ? CI_TYPE_HIERARCHY : [...CI_TYPE_HIERARCHY].reverse();
+
+      hier.forEach(type => {
+        const items = byType[type];
+        if (!items?.length) return;
+        const exp = this.expandedGroups.has(type);
+        els.push({ data: { id:'g_'+type, label:`${type} (${items.length})`, isGroup:true, groupType:type, expanded:exp, color:CI_TYPE_COLORS[type] }});
+        if (exp) {
+          items.forEach(n => {
+            els.push({ data: {
+              id:n.id, label: n.dataSource === 'auto' ? `⚡ ${n.name}` : `✏️ ${n.name}`,
+              ciType:n.type, status:n.status, environment:n.environment, site:n.site,
+              responsible:n.responsible, incidents:n.incidentCount, name:n.name,
+              color:CI_TYPE_COLORS[n.type], isGroup:false, isRoot: n.id === this.rootCI,
+              dataSource: n.dataSource,
+            }});
+          });
+        }
+      });
+
+      const edgeMap = new Map();
+      this.data.edges.forEach(e => {
+        const sn = idx.get(e.source);
+        const tn = idx.get(e.target);
+        if (!sn || !tn || !visIds.has(sn.id) || !visIds.has(tn.id)) return;
+        const sId = this.expandedGroups.has(sn.type) ? e.source : 'g_'+sn.type;
+        const tId = this.expandedGroups.has(tn.type) ? e.target : 'g_'+tn.type;
+        if (sId === tId) return;
+        const key = sId+'→'+tId;
+        if (!edgeMap.has(key)) edgeMap.set(key, { source:sId, target:tId, label:e.label, type:e.type, count:0 });
+        edgeMap.get(key).count++;
+      });
+      edgeMap.forEach((v, k) => {
+        els.push({ data: { id:'e_'+k, source:v.source, target:v.target, label:v.count>1?`${v.label} (${v.count})`:v.label, edgeType:v.type }});
+      });
+
+      const tEdgeMap = new Map();
+      transitiveEdges.forEach(e => {
+        const sn = idx.get(e.source);
+        const tn = idx.get(e.target);
+        if (!sn || !tn) return;
+        const sId = this.expandedGroups.has(sn.type) ? e.source : 'g_'+sn.type;
+        const tId = this.expandedGroups.has(tn.type) ? e.target : 'g_'+tn.type;
+        if (sId === tId) return;
+        const directKey = sId+'→'+tId;
+        if (edgeMap.has(directKey)) return;
+        const key = 't_'+sId+'→'+tId;
+        if (!tEdgeMap.has(key)) tEdgeMap.set(key, { source:sId, target:tId, count:0 });
+        tEdgeMap.get(key).count++;
+      });
+      tEdgeMap.forEach((v, k) => {
+        const lbl = v.count > 1 ? `транзитивная (${v.count})` : 'транзитивная связь';
+        els.push({ data: { id:'te_'+k, source:v.source, target:v.target, label:lbl, edgeType:'transitive' }});
+      });
+
+    } else {
+      vis.forEach(n => {
+        els.push({ data: {
+          id:n.id, label: n.dataSource === 'auto' ? `⚡ ${n.name}` : `✏️ ${n.name}`,
+          ciType:n.type, status:n.status, environment:n.environment, site:n.site,
+          responsible:n.responsible, incidents:n.incidentCount, name:n.name,
+          color:CI_TYPE_COLORS[n.type], isGroup:false, isRoot: n.id === this.rootCI,
+          dataSource: n.dataSource,
+        }});
+      });
+      this.data.edges.forEach((e,i) => {
+        if (visIds.has(e.source) && visIds.has(e.target)) {
+          els.push({ data: { id:'e_'+i, source:e.source, target:e.target, label:e.label, edgeType:e.type }});
+        }
+      });
+      const directSet = new Set();
+      this.data.edges.forEach(e => {
+        if (visIds.has(e.source) && visIds.has(e.target)) directSet.add(e.source+'→'+e.target);
+      });
+      transitiveEdges.forEach((e, i) => {
+        if (!directSet.has(e.source+'→'+e.target)) {
+          els.push({ data: { id:'te_'+i, source:e.source, target:e.target, label:e.label, edgeType:'transitive' }});
+        }
+      });
+    }
+    return els;
+  }
+
+  _getFiltered() {
+    if (!this._filteredCacheDirty && this._filteredCache) return this._filteredCache;
+    this._filteredCache = this._filtered();
+    this._filteredCacheDirty = false;
+    return this._filteredCache;
+  }
+
+  _invalidateFilterCache() {
+    this._filteredCacheDirty = true;
+    this._directEdgeIndex = null; // invalidate edge index on filter change
+    this._filteredCache = null;
+  }
+
+  _filtered() {
+    let nodes = this.data.nodes;
+
+    if (this.rootCI) {
+      const reachable = this._getReachableFromRoot(this.rootCI);
+      nodes = nodes.filter(n => reachable.has(n.id));
+    }
+
+    // Layer zone filter
+    if (this.collapsedLayers.size > 0) {
+      const hiddenTypes = new Set();
+      LAYER_ZONES.forEach(zone => {
+        if (this.collapsedLayers.has(zone.id)) {
+          zone.types.forEach(t => hiddenTypes.add(t));
+        }
+      });
+      nodes = nodes.filter(n => !hiddenTypes.has(n.type) || n.id === this.rootCI);
+    }
+
+    nodes = nodes.filter(n =>
+      this.filters.statuses.has(n.status) &&
+      this.filters.sites.has(n.site) &&
+      this.filters.environments.has(n.environment)
+    );
+
+    nodes = nodes.filter(n =>
+      this.filters.types.has(n.type) || n.id === this.rootCI
+    );
+
+    // Data source filter
+    if (this.dataSourceFilter !== 'all') {
+      nodes = nodes.filter(n => n.dataSource === this.dataSourceFilter || n.id === this.rootCI);
+    }
+
+    // Smart search
+    if (this.searchQuery.trim()) {
+      const parsed = this._parseSmartSearch(this.searchQuery);
+      if (parsed.text || Object.keys(parsed.attrs).length) {
+        nodes = nodes.filter(n => {
+          let match = true;
+          Object.entries(parsed.attrs).forEach(([key, val]) => {
+            if (!(n[key] || '').toLowerCase().includes(val)) match = false;
+          });
+          if (parsed.text) {
+            const t = parsed.text;
+            if (!(n.name.toLowerCase().includes(t) || n.type.toLowerCase().includes(t) ||
+                  n.status.toLowerCase().includes(t) || n.site.toLowerCase().includes(t) ||
+                  n.responsible.toLowerCase().includes(t) ||
+                  (n.ip || '').toLowerCase().includes(t) ||
+                  (n.hostname || '').toLowerCase().includes(t) ||
+                  (n.tags || []).some(tag => tag.toLowerCase().includes(t)) ||
+                  (n.environment || '').toLowerCase().includes(t) ||
+                  (n.description || '').toLowerCase().includes(t))) match = false;
+          }
+          return match;
+        });
+      }
+    }
+    return nodes;
+  }
+
+  _cyStyle() {
+    return [
+      { selector:'node[?isGroup]', style: {
+        'shape':'round-rectangle','width':220,'height':40,
+        'background-color':(e)=>e.data('color')||COLORS.groupBg,'background-opacity':0.15,
+        'border-width':2,'border-color':(e)=>e.data('color')||COLORS.groupBorder,'border-opacity':0.7,
+        'label':'data(label)','text-valign':'center','text-halign':'center',
+        'font-size':12,'font-weight':600,
+        'color':(e)=>e.data('color')||COLORS.text,'text-wrap':'ellipsis','text-max-width':200,
+      }},
+      { selector:'node[?isGroup][?expanded]', style:{'border-style':'dashed','border-opacity':0.5}},
+      { selector:'node[!isGroup]', style: {
+        'shape':'round-rectangle','width':130,'height':32,
+        'background-color':'#fff','border-width':2,
+        'border-color':(e)=>e.data('color')||COLORS.border,
+        'label':'data(label)','text-valign':'center','text-halign':'center',
+        'font-size':10,'color':COLORS.text,
+        'text-wrap':'ellipsis','text-max-width':110,
+      }},
+      { selector:'node[?isRoot]', style:{
+        'border-width':3,'border-color':COLORS.accent,'background-color':COLORS.accentBg,'font-weight':600,
+      }},
+      { selector:'node.highlighted', style:{'border-color':COLORS.accent,'border-width':3,'background-color':COLORS.accentBg}},
+      { selector:'node.selected-node', style:{'border-color':COLORS.accent,'border-width':3,'background-color':COLORS.accentBg}},
+      { selector:'node.faded', style:{'opacity':0.25}},
+      // Impact analysis styles
+      { selector:'node.impact-source', style:{'border-color':COLORS.impactHigh,'border-width':4,'background-color':'#FFCDD2','font-weight':700}},
+      { selector:'node.impact-affected', style:{'border-color':COLORS.impactMed,'border-width':3,'background-color':'#FFE0B2'}},
+      { selector:'node.impact-affected-deep', style:{'border-color':COLORS.impactLow,'border-width':2,'background-color':'#FFF3E0'}},
+      { selector:'node.impact-faded', style:{'opacity':0.15}},
+      { selector:'edge.impact-edge', style:{'line-color':COLORS.impactEdge,'target-arrow-color':COLORS.impactEdge,'width':3,'line-style':'solid','opacity':1,'z-index':10}},
+      { selector:'edge.impact-chain-edge', style:{'line-color':COLORS.impactEdge,'target-arrow-color':COLORS.impactEdge,'width':3.5,'line-style':'solid','opacity':1,'z-index':15,'curve-style':'bezier','target-arrow-shape':'triangle','arrow-scale':1.2}},
+      { selector:'edge.impact-faded', style:{'opacity':0.08}},
+      // Edge types
+      { selector:'edge[edgeType="depends_on"]', style:{
+        'line-color':COLORS.edge,'width':1.5,'target-arrow-color':COLORS.edge,
+        'target-arrow-shape':'triangle','arrow-scale':0.8,'curve-style':'bezier','opacity':0.7,
+      }},
+      { selector:'edge[edgeType="influences"]', style:{
+        'line-color':COLORS.accentLight,'width':1.5,'target-arrow-color':COLORS.accentLight,
+        'target-arrow-shape':'triangle','arrow-scale':0.8,'curve-style':'bezier','opacity':0.7,'line-style':'solid',
+      }},
+      { selector:'edge[edgeType="transitive"]', style:{
+        'line-color':COLORS.transitiveEdge,'width':2,'target-arrow-color':COLORS.transitiveEdge,
+        'target-arrow-shape':'triangle','arrow-scale':0.9,'curve-style':'bezier','line-style':'dashed','line-dash-pattern':[6,4],'opacity':0.85,
+      }},
+      { selector:'edge.hover-edge', style:{'width':2.5,'opacity':1,'z-index':5}},
+    ];
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LAYOUT
+     ═══════════════════════════════════════════════════════════════════════ */
+  _createLayoutWorker() {
+    try {
+      const code = `
+        self.onmessage = function(e) {
+          const { nodes, edges, direction, type } = e.data;
+          const positions = {};
+          if (type === 'breadthfirst') {
+            const adj = {}; const inDeg = {};
+            nodes.forEach(n => { adj[n.id] = []; inDeg[n.id] = 0; });
+            edges.forEach(e => { if(adj[e.source]) adj[e.source].push(e.target); if(inDeg[e.target]!==undefined) inDeg[e.target]++; });
+            const roots = nodes.filter(n => inDeg[n.id] === 0).map(n => n.id);
+            if (!roots.length && nodes.length) roots.push(nodes[0].id);
+            const levels = {}; const visited = new Set();
+            const queue = roots.map(r => ({ id:r, level:0 }));
+            roots.forEach(r => visited.add(r));
+            while (queue.length) {
+              const { id, level } = queue.shift();
+              levels[id] = level;
+              (adj[id]||[]).forEach(child => {
+                if (!visited.has(child)) { visited.add(child); queue.push({ id:child, level:level+1 }); }
+              });
+            }
+            nodes.forEach(n => { if(levels[n.id]===undefined) levels[n.id] = 0; });
+            const byLevel = {};
+            Object.entries(levels).forEach(([id,lv]) => { (byLevel[lv]=byLevel[lv]||[]).push(id); });
+            const spacingX = 180, spacingY = 100;
+            const isDown = direction === 'top-down';
+            Object.entries(byLevel).forEach(([lv, ids]) => {
+              const lvNum = parseInt(lv);
+              const startX = -(ids.length - 1) * spacingX / 2;
+              ids.forEach((id, i) => {
+                positions[id] = { x: startX + i * spacingX, y: isDown ? lvNum * spacingY : -lvNum * spacingY };
+              });
+            });
+          }
+          self.postMessage({ positions });
+        };
+      `;
+      const blob = new Blob([code], { type: 'application/javascript' });
+      return new Worker(URL.createObjectURL(blob));
+    } catch(e) { return null; }
+  }
+
+  _runLayout(animate) {
+    if (!this.cy) return;
+    const elCount = this.cy.elements().length;
+
+    if (this.groupMode) {
+      // Custom tiered layout: preserves CI_TYPE_HIERARCHY order
+      this._runTieredLayout();
+    } else if (elCount > 500) {
+      // For very large graphs, use preset layout with simple grid to avoid expensive algorithms
+      this.cy.layout({
+        name: 'breadthfirst',
+        directed: true,
+        spacingFactor: 0.5,
+        animate: false,
+        avoidOverlap: true,
+        nodeDimensionsIncludeLabels: false,
+      }).run();
+    } else if (elCount > 150) {
+      this.cy.layout({
+        name: 'breadthfirst',
+        directed: true,
+        spacingFactor: 0.75,
+        animate: false,
+        avoidOverlap: true,
+        nodeDimensionsIncludeLabels: true,
+      }).run();
+    } else {
+      this.cy.layout({
+        name: 'dagre',
+        rankDir: this.direction === 'top-down' ? 'TB' : 'BT',
+        nodeSep: 30, rankSep: 60, edgeSep: 15,
+        animate: animate && elCount < 80,
+        animationDuration: 300,
+      }).run();
+    }
+    this.cy.fit(undefined, 40);
+    this._scheduleMinimapUpdate();
+  }
+
+  /**
+   * Custom tiered layout for group mode.
+   * Places group nodes and their expanded children in strict CI_TYPE_HIERARCHY order.
+   * Each tier (type) gets a fixed vertical band. Expanded groups spread their children
+   * in a honeycomb-like pattern with subtle vertical offsets for visual appeal.
+   */
+  _runTieredLayout() {
+    const hier = this.direction === 'top-down' ? CI_TYPE_HIERARCHY : [...CI_TYPE_HIERARCHY].reverse();
+    const isDown = this.direction === 'top-down';
+
+    // Collect which types are present in the current graph
+    const groupNodes = this.cy.nodes('[?isGroup]');
+    const typeOrder = [];
+    hier.forEach(type => {
+      const gNode = groupNodes.filter(n => n.data('groupType') === type);
+      if (gNode.length > 0) typeOrder.push({ type, gNode: gNode[0] });
+    });
+
+    // Build layer zone lookup: which layer does each type belong to?
+    const typeToLayer = {};
+    LAYER_ZONES.forEach(zone => {
+      zone.types.forEach(t => { typeToLayer[t] = zone.id; });
+    });
+
+    // Group typeOrder entries by layer zone for collapsed spreading
+    const layerGroups = {};
+    typeOrder.forEach((entry, idx) => {
+      const layerId = typeToLayer[entry.type] || 'unknown';
+      if (!layerGroups[layerId]) layerGroups[layerId] = [];
+      layerGroups[layerId].push({ ...entry, globalIdx: idx });
+    });
+
+    // Layout parameters
+    const TIER_GAP_COLLAPSED = 70;   // vertical gap between collapsed tiers
+    const TIER_GAP_EXPANDED = 65;    // gap after an expanded tier
+    const LAYER_GAP = 40;            // extra gap between layer zones
+    const NODE_W = 165;              // horizontal spacing between expanded nodes
+    const NODE_H = 52;               // vertical spacing between expanded rows
+    const MAX_COLS = 10;             // max columns for expanded nodes
+    const STAGGER_Y = 14;            // vertical offset for odd columns (honeycomb)
+    const JITTER_X = 8;              // max random horizontal jitter
+    const JITTER_Y = 5;              // max random vertical jitter
+    const COLLAPSED_X_RANGE = 200;   // max horizontal offset for collapsed groups
+    const COLLAPSED_JITTER_Y = 6;    // subtle vertical jitter for collapsed groups
+
+    // Seeded pseudo-random for consistent layout across renders
+    let seed = 42;
+    const seededRandom = () => { seed = (seed * 16807 + 0) % 2147483647; return (seed - 1) / 2147483646; };
+
+    let currentY = 0;
+    const positions = {};
+    let prevLayerId = null;
+
+    // Process in hierarchy order, each type on its own row
+    // but with horizontal offset that alternates left/right within each layer
+    const layerOrder = this.direction === 'top-down'
+      ? ['services', 'applications', 'infrastructure']
+      : ['infrastructure', 'applications', 'services'];
+
+    layerOrder.forEach(layerId => {
+      const layerEntries = (layerGroups[layerId] || []).filter(e => {
+        return typeOrder.some(t => t.type === e.type);
+      });
+      if (layerEntries.length === 0) return;
+
+      // Add layer gap between zones
+      if (prevLayerId !== null) currentY += LAYER_GAP;
+      prevLayerId = layerId;
+
+      // Process entries in hierarchy order, interleaving collapsed and expanded
+      let collapsedIdx = 0; // track zigzag index for collapsed items within this layer
+      layerEntries.forEach(entry => {
+        const { type, gNode } = entry;
+        const isExpanded = this.expandedGroups.has(type) && this.cy.nodes(`[!isGroup][ciType="${type}"]`).length > 0;
+
+        if (!isExpanded) {
+          // Collapsed group: own row with horizontal zigzag offset
+          const direction = (collapsedIdx % 2 === 0) ? -1 : 1;
+          const magnitude = (0.4 + seededRandom() * 0.6) * COLLAPSED_X_RANGE;
+          const x = direction * magnitude;
+          const jy = (seededRandom() - 0.5) * COLLAPSED_JITTER_Y * 2;
+          const y = currentY + jy;
+          positions[gNode.id()] = { x, y: isDown ? y : -y };
+          currentY += TIER_GAP_COLLAPSED;
+          collapsedIdx++;
+        } else {
+          // Expanded group: header + honeycomb children
+          const childNodes = this.cy.nodes(`[!isGroup][ciType="${type}"]`);
+          positions[gNode.id()] = { x: 0, y: isDown ? currentY : -currentY };
+          currentY += 55;
+
+          const childCount = childNodes.length;
+          const cols = Math.min(childCount, MAX_COLS);
+          const rows = Math.ceil(childCount / cols);
+          const gridW = cols * NODE_W;
+          const startX = -(gridW - NODE_W) / 2;
+
+          childNodes.forEach((node, i) => {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const rowStagger = (row % 2 === 1) ? NODE_W * 0.4 : 0;
+            const colStagger = (col % 2 === 1) ? STAGGER_Y : 0;
+            const jx = (seededRandom() - 0.5) * JITTER_X * 2;
+            const jy = (seededRandom() - 0.5) * JITTER_Y * 2;
+
+            const x = startX + col * NODE_W + rowStagger + jx;
+            const baseY = currentY + row * NODE_H + colStagger + jy;
+
+            positions[node.id()] = {
+              x: x,
+              y: isDown ? baseY : -baseY,
+            };
+          });
+
+          currentY += rows * NODE_H + TIER_GAP_EXPANDED;
+        }
+      });
+    });
+
+    // Apply positions without animation for speed
+    this.cy.startBatch();
+    Object.entries(positions).forEach(([id, pos]) => {
+      const node = this.cy.getElementById(id);
+      if (node.length) node.position(pos);
+    });
+    this.cy.endBatch();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     CY EVENTS
+     ═══════════════════════════════════════════════════════════════════════ */
+  _bindCyEvents() {
+    const tooltip = document.createElement('div');
+    tooltip.className = 'cy-tooltip';
+    tooltip.style.display = 'none';
+    document.body.appendChild(tooltip);
+
+    // Node click
+    this.cy.on('tap', 'node', e => {
+      const node = e.target;
+      const data = node.data();
+
+      if (data.isGroup) {
+        // Toggle group expansion
+        const type = data.groupType;
+        if (this.expandedGroups.has(type)) this.expandedGroups.delete(type);
+        else this.expandedGroups.add(type);
+        this._recordHistory();
+        this._refresh();
+        return;
+      }
+
+      // Individual CI click
+      this.selectedNode = data.id;
+      this.cy.nodes().removeClass('selected-node');
+      node.addClass('selected-node');
+
+      // Impact mode: run analysis from clicked node
+      if (this.impactMode) {
+        this._runImpactAnalysis(data.id);
+      }
+
+      // Open context panel
+      this._openContextPanel(data.id);
+    });
+
+    // Background click
+    this.cy.on('tap', e => {
+      if (e.target === this.cy) {
+        this.selectedNode = null;
+        this.cy.nodes().removeClass('selected-node');
+        if (!this.impactMode) {
+          this.cy.elements().removeClass('faded');
+        }
+        this._closeContextPanel();
+      }
+    });
+
+    // Hover highlight (disabled for large graphs)
+    const HOVER_THRESHOLD = 300;
+    this.cy.on('mouseover', 'node', e => {
+      if (this.impactMode) return;
+      if (this.cy.nodes().length > HOVER_THRESHOLD) return;
+      const node = e.target;
+      const neighborhood = node.closedNeighborhood();
+      this.cy.elements().not(neighborhood).addClass('faded');
+      neighborhood.connectedEdges().addClass('hover-edge');
+    });
+    this.cy.on('mouseout', 'node', () => {
+      if (this.impactMode) return;
+      this.cy.elements().removeClass('faded hover-edge');
+    });
+
+    // Right-click context menu on nodes
+    this.cy.on('cxttap', 'node', e => {
+      e.originalEvent.preventDefault();
+      const node = e.target;
+      const data = node.data();
+      if (data.isGroup) return; // no context menu for groups
+      this._showCtxMenu(data.id, e.originalEvent);
+    });
+
+    // Hide context menu on background click or left click
+    this.cy.on('tap', () => this._hideCtxMenu());
+    document.addEventListener('click', () => this._hideCtxMenu());
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') this._hideCtxMenu(); });
+
+    // Prevent browser context menu on the cy container
+    document.querySelector('.js-rsm-cy').addEventListener('contextmenu', e => e.preventDefault());
+
+    // Edge tooltip
+    this.cy.on('mouseover', 'edge', e => {
+      const edge = e.target;
+      const lbl = edge.data('label') || '';
+      tooltip.textContent = lbl;
+      tooltip.style.display = 'block';
+      const pos = e.renderedPosition || e.position;
+      const rect = this.cy.container().getBoundingClientRect();
+      tooltip.style.left = (rect.left + pos.x + 10) + 'px';
+      tooltip.style.top = (rect.top + pos.y - 20) + 'px';
+    });
+    this.cy.on('mouseout', 'edge', () => { tooltip.style.display = 'none'; });
+
+    // Zoom label update
+    this.cy.on('zoom', () => {
+      const lbl = document.querySelector('.js-zoom-label');
+      if (lbl) lbl.textContent = Math.round(this.cy.zoom() * 100) + '%';
+      this._scheduleMinimapUpdate();
+    });
+    this.cy.on('pan', () => this._scheduleMinimapUpdate());
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     CONTEXT PANEL
+     ═══════════════════════════════════════════════════════════════════════ */
+  _openContextPanel(ciId) {
+    const n = this._nodeIndex.get(ciId);
+    if (!n) return;
+    const panel = document.querySelector('.js-rsm-context-panel');
+    const icon = document.querySelector('.js-ctx-icon');
+    const name = document.querySelector('.js-ctx-name');
+    const type = document.querySelector('.js-ctx-type');
+    const body = document.querySelector('.js-ctx-body');
+
+    icon.style.background = CI_TYPE_COLORS[n.type] + '20';
+    icon.style.color = CI_TYPE_COLORS[n.type];
+    icon.textContent = SHORT_NAMES[n.type] || '?';
+    name.textContent = n.name;
+    type.textContent = n.type;
+
+    // Status badge class
+    let statusClass = 'status-active';
+    if (n.status === 'На обслуживании') statusClass = 'status-warning';
+    if (n.status === 'Выведен') statusClass = 'status-danger';
+
+    let h = '';
+
+    // Actions
+    h += `<div class="ctx-actions">
+      <button class="ctx-action-btn primary" onclick="alert('Открытие карточки CI в SimpleOne')">Открыть карточку</button>
+      <button class="ctx-action-btn danger" class="js-ctx-impact-btn" data-ci="${n.id}">⚡ Impact</button>
+    </div>`;
+
+    // Attributes section
+    h += `<div class="ctx-section">
+      <div class="ctx-section-title">Основные атрибуты</div>
+      <div class="ctx-row"><span class="ctx-label">Статус</span><span class="ctx-value"><span class="ctx-badge ${statusClass}">${this._esc(n.status)}</span></span></div>
+      <div class="ctx-row"><span class="ctx-label">Окружение</span><span class="ctx-value">${this._esc(n.environment)}</span></div>
+      <div class="ctx-row"><span class="ctx-label">Площадка</span><span class="ctx-value">${this._esc(n.site)}</span></div>
+      <div class="ctx-row"><span class="ctx-label">SLA</span><span class="ctx-value">${this._esc(n.sla)}</span></div>
+      <div class="ctx-row"><span class="ctx-label">IP-адрес</span><span class="ctx-value" style="font-family:monospace;font-size:12px">${this._esc(n.ip || '—')}</span></div>
+      <div class="ctx-row"><span class="ctx-label">Hostname</span><span class="ctx-value" style="font-family:monospace;font-size:12px">${this._esc(n.hostname || '—')}</span></div>
+      <div class="ctx-row"><span class="ctx-label">Теги</span><span class="ctx-value">${(n.tags || []).map(t => `<span style="display:inline-block;font-size:10px;background:${COLORS.accentBg};color:${COLORS.accent};padding:1px 6px;border-radius:3px;margin:1px 2px">${this._esc(t)}</span>`).join('') || '—'}</span></div>
+      <div class="ctx-row"><span class="ctx-label">Последнее обновление</span><span class="ctx-value">${this._esc(n.lastUpdate)}</span></div>
+      <div class="ctx-row"><span class="ctx-label">Источник данных</span><span class="ctx-value"><span class="ctx-badge ${n.dataSource}">${n.dataSource === 'auto' ? '⚡ Автоматический' : '✏️ Ручной'}</span></span></div>
+    </div>`;
+
+    // Owner section
+    h += `<div class="ctx-section">
+      <div class="ctx-section-title">Владелец / Ответственный</div>
+      <div class="ctx-row"><span class="ctx-label">Ответственный</span><span class="ctx-value">${this._esc(n.responsible)}</span></div>
+      <div class="ctx-row"><span class="ctx-label">Описание</span><span class="ctx-value">${this._esc(n.description)}</span></div>
+    </div>`;
+
+    // Incidents section
+    h += `<div class="ctx-section">
+      <div class="ctx-section-title">Открытые инциденты (${n.incidents.length})</div>`;
+    if (n.incidents.length === 0) {
+      h += `<div style="font-size:12px;color:${COLORS.textMuted};padding:4px 0">Нет открытых инцидентов</div>`;
+    } else {
+      n.incidents.forEach(inc => {
+        let prClass = 'low';
+        if (inc.priority === 'Критический') prClass = 'crit';
+        else if (inc.priority === 'Высокий') prClass = 'high';
+        else if (inc.priority === 'Средний') prClass = 'med';
+        h += `<div class="incident-item">
+          <div class="inc-header">
+            <span class="inc-id">${this._esc(inc.id)}</span>
+            <span class="inc-priority ${prClass}">${this._esc(inc.priority)}</span>
+          </div>
+          <div class="inc-title">${this._esc(inc.title)}</div>
+          <div class="inc-date">${this._esc(inc.date)}</div>
+        </div>`;
+      });
+    }
+    h += '</div>';
+
+    // Dependencies section
+    const entry = this._adjacency[n.id];
+    if (entry) {
+      const parentNames = [...entry.parents].map(pid => this._nodeIndex.get(pid)?.name).filter(Boolean);
+      const childNames = [...entry.children].map(cid => this._nodeIndex.get(cid)?.name).filter(Boolean);
+      h += `<div class="ctx-section">
+        <div class="ctx-section-title">Связи</div>
+        <div class="ctx-row"><span class="ctx-label">Зависит от (${parentNames.length})</span><span class="ctx-value">${parentNames.slice(0,5).join(', ')}${parentNames.length>5?' ...':''}</span></div>
+        <div class="ctx-row"><span class="ctx-label">Влияет на (${childNames.length})</span><span class="ctx-value">${childNames.slice(0,5).join(', ')}${childNames.length>5?' ...':''}</span></div>
+      </div>`;
+    }
+
+    // Upstream services section (P1)
+    const upstreamSvcs = this._getUpstreamServices(n.id);
+    if (upstreamSvcs.length > 0) {
+      h += `<div class="ctx-section">
+        <div class="ctx-section-title">Зависимые сервисы (${upstreamSvcs.length})</div>
+        <table class="upstream-svc-table">
+          <thead><tr><th>Сервис</th><th>Тип</th><th>SLA</th><th>Глубина</th></tr></thead>
+          <tbody>`;
+      upstreamSvcs.forEach(svc => {
+        const slaConf = SLA_HEATMAP[svc.sla] || SLA_HEATMAP['—'];
+        h += `<tr class="upstream-svc-row" data-svc-class="js-${svc.id}">
+          <td>${this._esc(svc.name)}</td>
+          <td style="font-size:10px;color:${COLORS.textMuted}">${this._esc(svc.type)}</td>
+          <td><span class="svc-sla" style="background:${slaConf.color}20;color:${slaConf.color}">${svc.sla}</span></td>
+          <td style="text-align:center;color:${COLORS.textMuted}">${svc.depth}</td>
+        </tr>`;
+      });
+      h += `</tbody></table></div>`;
+    }
+
+    body.innerHTML = h;
+    panel.classList.add('open');
+
+    // Bind impact button in context panel
+    const impBtn = document.querySelector('.js-ctx-impact-btn');
+    if (impBtn) {
+      impBtn.addEventListener('click', () => {
+        this.impactMode = true;
+        this.activeMode = 'impact';
+        this._updateModeUI();
+        this._runImpactAnalysis(n.id);
+      });
+    }
+
+    // Bind upstream service row clicks
+    body.querySelectorAll('.upstream-svc-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const svcId = row.dataset.svcId;
+        if (svcId) this._openContextPanel(svcId);
+      });
+    });
+  }
+
+  _closeContextPanel() {
+    document.querySelector('.js-rsm-context-panel')?.classList.remove('open');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     MINIMAP
+     ═══════════════════════════════════════════════════════════════════════ */
+  _initMinimap() {
+    this._minimapCanvas = document.querySelector('.js-minimap-canvas');
+    if (!this._minimapCanvas) return;
+    this._minimapCtx = this._minimapCanvas.getContext('2d');
+    const container = document.querySelector('.js-rsm-minimap');
+
+    // Toggle minimize
+    document.querySelector('.js-minimap-toggle')?.addEventListener('click', e => {
+      e.stopPropagation();
+      this._minimapMinimized = !this._minimapMinimized;
+      container.classList.toggle('minimized', this._minimapMinimized);
+      document.querySelector('.js-minimap-toggle').textContent = this._minimapMinimized ? '+' : '−';
+      if (!this._minimapMinimized) this._updateMinimap();
+    });
+
+    // Click to navigate
+    container.addEventListener('mousedown', e => {
+      if (this._minimapMinimized) {
+        this._minimapMinimized = false;
+        container.classList.remove('minimized');
+        document.querySelector('.js-minimap-toggle').textContent = '−';
+        this._updateMinimap();
+        return;
+      }
+      this._minimapNavigate(e);
+    });
+
+    this._updateMinimap();
+  }
+
+  _scheduleMinimapUpdate() {
+    if (this._minimapRAF) cancelAnimationFrame(this._minimapRAF);
+    this._minimapRAF = requestAnimationFrame(() => this._updateMinimap());
+  }
+
+  _updateMinimap() {
+    if (!this.cy || !this._minimapCtx || this._minimapMinimized) return;
+    const canvas = this._minimapCanvas;
+    const ctx = this._minimapCtx;
+    const container = document.querySelector('.js-rsm-minimap');
+    const w = container.clientWidth;
+    const h = container.clientHeight - 0;
+    canvas.width = w * 2; canvas.height = h * 2;
+    ctx.scale(2, 2);
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = COLORS.bg;
+    ctx.fillRect(0, 0, w, h);
+
+    const bb = this.cy.elements().boundingBox();
+    if (bb.w === 0 || bb.h === 0) return;
+    const pad = 10;
+    const scaleX = (w - pad * 2) / bb.w;
+    const scaleY = (h - pad * 2) / bb.h;
+    const scale = Math.min(scaleX, scaleY);
+    const offX = pad + (w - pad * 2 - bb.w * scale) / 2 - bb.x1 * scale;
+    const offY = pad + (h - pad * 2 - bb.h * scale) / 2 - bb.y1 * scale;
+
+    // Draw edges
+    ctx.strokeStyle = COLORS.border;
+    ctx.lineWidth = 0.5;
+    ctx.globalAlpha = 0.3;
+    this.cy.edges().forEach(edge => {
+      const sp = edge.source().position();
+      const tp = edge.target().position();
+      ctx.beginPath();
+      ctx.moveTo(sp.x * scale + offX, sp.y * scale + offY);
+      ctx.lineTo(tp.x * scale + offX, tp.y * scale + offY);
+      ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+
+    // Draw nodes
+    this.cy.nodes().forEach(node => {
+      const pos = node.position();
+      const x = pos.x * scale + offX;
+      const y = pos.y * scale + offY;
+      const color = node.data('color') || COLORS.accent;
+      ctx.fillStyle = color;
+      const sz = node.data('isGroup') ? 4 : 2;
+      ctx.fillRect(x - sz, y - sz, sz * 2, sz * 2);
+    });
+
+    // Draw viewport rectangle
+    const ext = this.cy.extent();
+    const vx = ext.x1 * scale + offX;
+    const vy = ext.y1 * scale + offY;
+    const vw = ext.w * scale;
+    const vh = ext.h * scale;
+    ctx.strokeStyle = COLORS.accent;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(vx, vy, vw, vh);
+    ctx.fillStyle = COLORS.accent + '10';
+    ctx.fillRect(vx, vy, vw, vh);
+  }
+
+  _minimapNavigate(e) {
+    if (!this.cy) return;
+    const container = document.querySelector('.js-rsm-minimap');
+    const rect = container.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+
+    const bb = this.cy.elements().boundingBox();
+    if (bb.w === 0 || bb.h === 0) return;
+    const pad = 10;
+    const scaleX = (w - pad * 2) / bb.w;
+    const scaleY = (h - pad * 2) / bb.h;
+    const scale = Math.min(scaleX, scaleY);
+    const offX = pad + (w - pad * 2 - bb.w * scale) / 2 - bb.x1 * scale;
+    const offY = pad + (h - pad * 2 - bb.h * scale) / 2 - bb.y1 * scale;
+
+    const graphX = (mx - offX) / scale;
+    const graphY = (my - offY) / scale;
+    this.cy.center({ x: graphX, y: graphY });
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     HEADER & SIDEBAR BINDINGS
+     ═══════════════════════════════════════════════════════════════════════ */
+  _bindHeader() {
+    document.querySelector('.js-zoom-in')?.addEventListener('click', () => this.cy?.zoom({ level: this.cy.zoom() * 1.3, renderedPosition: { x: this.cy.width()/2, y: this.cy.height()/2 }}));
+    document.querySelector('.js-zoom-out')?.addEventListener('click', () => this.cy?.zoom({ level: this.cy.zoom() / 1.3, renderedPosition: { x: this.cy.width()/2, y: this.cy.height()/2 }}));
+    document.querySelector('.js-zoom-fit')?.addEventListener('click', () => { this.cy?.fit(undefined, 40); this._scheduleMinimapUpdate(); });
+    document.querySelector('.js-rsm-sidebar-toggle')?.addEventListener('click', () => document.querySelector('.js-rsm-sidebar')?.classList.toggle('collapsed'));
+    document.querySelector('.js-btn-undo')?.addEventListener('click', () => this._undo());
+    document.querySelector('.js-btn-redo')?.addEventListener('click', () => this._redo());
+    // btn-impact removed, mode dropdown handles this now
+    document.querySelector('.js-impact-exit')?.addEventListener('click', () => this._exitImpactMode());
+
+    // Impact chain mode toggle
+    document.querySelector('.js-impact-chain-toggle')?.querySelectorAll('.ict-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        if (mode === this.impactChainMode) return;
+        this.impactChainMode = mode;
+        // Update active state
+        document.querySelectorAll('#impact-chain-toggle .ict-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        // Re-run impact with current source
+        if (this.impactSourceId) {
+          this._runImpactAnalysis(this.impactSourceId);
+        }
+      });
+    });
+    // Export buttons
+    document.querySelector('.js-btn-export-png')?.addEventListener('click', () => this._exportPNG());
+    document.querySelector('.js-btn-export-csv')?.addEventListener('click', () => this._exportCSV());
+
+    // Mode Dropdown
+    const modeDropdown = document.querySelector('.js-mode-dropdown');
+    const modeTrigger = document.querySelector('.js-mode-trigger');
+    if (modeTrigger) {
+      modeTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        modeDropdown.classList.toggle('open');
+      });
+    }
+    // Close dropdown on outside click
+    document.addEventListener('click', (e) => {
+      if (!modeDropdown?.contains(e.target)) {
+        modeDropdown?.classList.remove('open');
+      }
+    });
+    // Mode option clicks
+    document.querySelector('.js-mode-opt-model')?.addEventListener('click', () => {
+      this._activateMode('model');
+      modeDropdown?.classList.remove('open');
+    });
+    document.querySelector('.js-mode-opt-impact')?.addEventListener('click', () => {
+      this._activateMode('impact');
+      modeDropdown?.classList.remove('open');
+    });
+
+    // Diff button
+    document.querySelector('.js-btn-diff')?.addEventListener('click', () => this._openSnapshotModal());
+    document.querySelector('.js-diff-exit')?.addEventListener('click', () => this._exitDiffMode());
+  }
+
+  _bindSidebar() {
+    const sc = document.querySelector('.js-sidebar-content');
+    if (!sc) return;
+
+    // Smart search
+    const searchInput = document.querySelector('.js-rsm-search');
+    const hints = document.querySelector('.js-search-hints');
+    if (searchInput) {
+      let searchDebounce = null;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+          this._updateSearchHints(searchInput.value);
+        }, 200);
+      });
+      searchInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          this.searchQuery = searchInput.value;
+          hints?.classList.remove('open');
+          this._invalidateFilterCache();
+          this._recordHistory();
+          this._refresh();
+        }
+        if (e.key === 'Escape') {
+          hints?.classList.remove('open');
+          searchInput.blur();
+        }
+      });
+      searchInput.addEventListener('blur', () => {
+        setTimeout(() => hints?.classList.remove('open'), 200);
+      });
+    }
+    // Search hint clicks
+    hints?.addEventListener('mousedown', e => {
+      const item = e.target.closest('.search-hint-item');
+      if (!item) return;
+      e.preventDefault();
+      const ciId = item.dataset.hintId;
+      hints.classList.remove('open');
+      // Focus on this node
+      if (this.cy) {
+        const node = this.cy.getElementById(ciId);
+        if (node.length) {
+          this.cy.animate({ center: { eles: node }, zoom: 1.5 }, { duration: 400 });
+          node.addClass('highlighted');
+          setTimeout(() => node.removeClass('highlighted'), 2000);
+        } else {
+          // Node might be in a collapsed group — expand it
+          const nd = this._nodeIndex.get(ciId);
+          if (nd) {
+            this.expandedGroups.add(nd.type);
+            this._refresh();
+            setTimeout(() => {
+              const n2 = this.cy?.$('#' + ciId);
+              if (n2?.length) {
+                this.cy.animate({ center: { eles: n2 }, zoom: 1.5 }, { duration: 400 });
+                n2.addClass('highlighted');
+                setTimeout(() => n2.removeClass('highlighted'), 2000);
+              }
+            }, 500);
+          }
+        }
+        this._openContextPanel(ciId);
+      }
+    });
+
+    // Root CI
+    const rootInput = document.querySelector('.js-root-ci-input');
+    const rootDropdown = document.querySelector('.js-root-ci-dropdown');
+    if (rootInput) {
+      rootInput.addEventListener('input', () => {
+        const q = rootInput.value.toLowerCase();
+        if (!q) { rootDropdown.classList.remove('open'); return; }
+        const matches = this.data.nodes.filter(n => n.name.toLowerCase().includes(q) || n.type.toLowerCase().includes(q)).slice(0, 20);
+        rootDropdown.innerHTML = matches.map(n => `<div class="root-ci-option" data-rid="${n.id}"><span class="opt-dot" style="background:${CI_TYPE_COLORS[n.type]}"></span><span class="opt-name">${this._esc(n.name)}</span><span class="opt-type">${this._esc(n.type)}</span></div>`).join('');
+        rootDropdown.classList.toggle('open', matches.length > 0);
+      });
+      rootInput.addEventListener('blur', () => setTimeout(() => rootDropdown?.classList.remove('open'), 200));
+      rootDropdown?.addEventListener('mousedown', e => {
+        const opt = e.target.closest('.root-ci-option');
+        if (!opt) return;
+        e.preventDefault();
+        this.rootCI = opt.dataset.rid;
+        rootInput.value = '';
+        rootDropdown.classList.remove('open');
+        this._renderRootBadge();
+        this._invalidateFilterCache();
+        this._recordHistory();
+        this._refresh();
+        // Auto-trigger Impact when rootCI selected in impact mode
+        if (this.impactMode && this.rootCI) {
+          setTimeout(() => this._runImpactAnalysis(this.rootCI), 400);
+        }
+        // Bind close on new badge
+        document.querySelector('.js-root-badge-close')?.addEventListener('click', () => {
+          this.rootCI = null;
+          this._renderRootBadge();
+          this._invalidateFilterCache();
+          this._recordHistory();
+          this._refresh();
+        });
+      });
+    }
+    document.querySelector('.js-root-ci-clear')?.addEventListener('click', () => {
+      this.rootCI = null;
+      this._renderRootBadge();
+      this._invalidateFilterCache();
+      this._recordHistory();
+      this._refresh();
+    });
+    // Bind existing badge close
+    document.querySelector('.js-root-badge-close')?.addEventListener('click', () => {
+      this.rootCI = null;
+      this._renderRootBadge();
+      this._invalidateFilterCache();
+      this._recordHistory();
+      this._refresh();
+    });
+
+    // Direction
+    document.querySelector('.js-dir-td')?.addEventListener('click', () => {
+      if (this.direction === 'top-down') return;
+      this.direction = 'top-down';
+      document.querySelector('.js-dir-td').classList.add('active');
+      document.querySelector('.js-dir-bu').classList.remove('active');
+      this._invalidateFilterCache();
+      this._recordHistory();
+      this._refresh();
+    });
+    document.querySelector('.js-dir-bu')?.addEventListener('click', () => {
+      if (this.direction === 'bottom-up') return;
+      this.direction = 'bottom-up';
+      document.querySelector('.js-dir-bu').classList.add('active');
+      document.querySelector('.js-dir-td').classList.remove('active');
+      this._invalidateFilterCache();
+      this._recordHistory();
+      this._refresh();
+    });
+
+    // Focus Tree Mode
+    document.querySelector('.js-ft-off')?.addEventListener('click', () => {
+      this.focusTreeMode = false;
+      document.querySelectorAll('.focus-tree-toggle button').forEach(b => b.classList.remove('active'));
+      document.querySelector('.js-ft-off').classList.add('active');
+      this._invalidateFilterCache();
+      this._recordHistory();
+      this._refresh();
+    });
+    document.querySelector('.js-ft-down')?.addEventListener('click', () => {
+      this.focusTreeMode = 'down';
+      document.querySelectorAll('.focus-tree-toggle button').forEach(b => b.classList.remove('active'));
+      document.querySelector('.js-ft-down').classList.add('active');
+      this._invalidateFilterCache();
+      this._recordHistory();
+      this._refresh();
+    });
+    document.querySelector('.js-ft-up')?.addEventListener('click', () => {
+      this.focusTreeMode = 'up';
+      document.querySelectorAll('.focus-tree-toggle button').forEach(b => b.classList.remove('active'));
+      document.querySelector('.js-ft-up').classList.add('active');
+      this._invalidateFilterCache();
+      this._recordHistory();
+      this._refresh();
+    });
+
+    // Group toggle
+    document.querySelector('.js-group-toggle')?.addEventListener('change', e => {
+      this.groupMode = e.target.checked;
+      this._invalidateFilterCache();
+      this._recordHistory();
+      this._refresh();
+    });
+
+    // SLA Heatmap toggle
+    document.querySelector('.js-sla-heatmap-toggle')?.addEventListener('change', e => {
+      this.slaHeatmap = e.target.checked;
+      this._buildSidebar();
+      this._bindSidebar();
+      this._applySlaHeatmap();
+    });
+
+    // Layer zones
+    sc.querySelectorAll('[data-zone]').forEach(cb => {
+      cb.addEventListener('change', e => {
+        const zoneId = e.target.dataset.zone;
+        if (e.target.checked) this.collapsedLayers.delete(zoneId);
+        else this.collapsedLayers.add(zoneId);
+        this._invalidateFilterCache();
+        this._recordHistory();
+        this._refresh();
+      });
+    });
+
+    // Data source filter
+    sc.querySelectorAll('.ds-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        this.dataSourceFilter = chip.dataset.ds;
+        sc.querySelectorAll('.ds-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        this._invalidateFilterCache();
+        this._recordHistory();
+        this._refresh();
+      });
+    });
+
+    // Filter checkboxes (with debounce)
+    sc.querySelectorAll('[data-fid]').forEach(cb => {
+      cb.addEventListener('change', e => {
+        const fid = e.target.dataset.fid;
+        const val = e.target.dataset.val;
+        const map = {'f-types':'types','f-stat':'statuses','f-site':'sites','f-env':'environments'};
+        const setName = map[fid];
+        if (!setName) return;
+        if (e.target.checked) this.filters[setName].add(val);
+        else this.filters[setName].delete(val);
+        clearTimeout(this._filterDebounce);
+        this._filterDebounce = setTimeout(() => {
+          this._invalidateFilterCache();
+          this._recordHistory();
+          this._refresh();
+        }, 300);
+      });
+    });
+
+    // Section collapse
+    sc.querySelectorAll('.section-title').forEach(title => {
+      title.addEventListener('click', () => {
+        const sec = title.dataset.sec;
+        if (!sec) return;
+        const body = sc.querySelector(`.section-body[data-sec="${sec}"]`);
+        const arrow = title.querySelector('.arrow');
+        if (body) body.classList.toggle('hidden');
+        if (arrow) arrow.classList.toggle('collapsed');
+      });
+    });
+
+    // Presets
+    this._bindPresets();
+
+    // Reset
+    document.querySelector('.js-reset-filters')?.addEventListener('click', () => {
+      this.filters.types = new Set(CI_TYPE_HIERARCHY);
+      this.filters.statuses = new Set(STATUSES);
+      this.filters.sites = new Set(SITES);
+      this.filters.environments = new Set(ENVIRONMENTS);
+      this.rootCI = null;
+      this.searchQuery = '';
+      this.collapsedLayers.clear();
+      this.dataSourceFilter = 'all';
+      this.expandedGroups.clear();
+      this.groupMode = true;
+      this._invalidateFilterCache();
+      this._buildSidebar();
+      this._bindSidebar();
+      this._recordHistory();
+      this._refresh();
+    });
+  }
+
+  _bindPresets() {
+    const sc = document.querySelector('.js-sidebar-content');
+    if (!sc) return;
+
+    // Save current
+    document.querySelector('.js-save-btn')?.addEventListener('click', () => this._showSaveModal());
+
+    // Load preset on click (but not on action buttons)
+    sc.querySelectorAll('.preset-item').forEach(item => {
+      item.addEventListener('click', e => {
+        if (e.target.closest('.preset-action') || e.target.closest('.preset-actions')) return;
+        const pi = parseInt(item.dataset.pi);
+        const allPresets = [...DEFAULT_PRESETS, ...this.savedFilters];
+        const preset = allPresets[pi];
+        if (!preset) return;
+        this._applyPreset(preset);
+      });
+    });
+
+    // Preset action buttons
+    sc.querySelectorAll('.preset-action').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        const idx = parseInt(btn.dataset.sd);
+        if (idx < 0 || idx >= this.savedFilters.length) return;
+
+        if (action === 'delete') {
+          this._showConfirmModal('Удалить пресет?', `Пресет \xab${this.savedFilters[idx].name}\xbb будет удал\u0451н безвозвратно.`, () => {
+            this.savedFilters.splice(idx, 1);
+            this._saveSaved();
+            this._renderPresets();
+            this._bindPresets();
+            this._showToast('Пресет удал\u0451н');
+          });
+        } else if (action === 'rename') {
+          this._showRenameModal(idx);
+        } else if (action === 'share') {
+          this._sharePreset(idx);
+        }
+      });
+    });
+  }
+
+  _showConfirmModal(title, message, onConfirm) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <h3>${title}</h3>
+        <p style="font-size:13px;color:${COLORS.textSecondary};margin-bottom:16px">${message}</p>
+        <div class="modal-actions">
+          <button class="btn-cancel" class="js-confirm-cancel">Отмена</button>
+          <button class="btn-save" style="background:${COLORS.danger}" class="js-confirm-ok">Удалить</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.querySelector('.js-confirm-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.querySelector('.js-confirm-ok').addEventListener('click', () => {
+      overlay.remove();
+      onConfirm();
+    });
+  }
+
+  _showRenameModal(idx) {
+    const preset = this.savedFilters[idx];
+    if (!preset) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <h3>Переименовать пресет</h3>
+        <input type="text" class="js-rename-name" value="${this._esc(preset.name)}" placeholder="Название">
+        <textarea class="js-rename-desc" placeholder="Описание (необязательно)">${this._esc(preset.desc || '')}</textarea>
+        <div class="modal-actions">
+          <button class="btn-cancel" class="js-rename-cancel">Отмена</button>
+          <button class="btn-save" class="js-rename-save">Сохранить</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.querySelector('.js-rename-name').focus();
+    document.querySelector('.js-rename-name').select();
+    document.querySelector('.js-rename-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.querySelector('.js-rename-save').addEventListener('click', () => {
+      const newName = document.querySelector('.js-rename-name').value.trim();
+      const newDesc = document.querySelector('.js-rename-desc').value.trim();
+      if (!newName) { document.querySelector('.js-rename-name').style.borderColor = COLORS.danger; return; }
+      preset.name = newName;
+      preset.desc = newDesc;
+      this._saveSaved();
+      overlay.remove();
+      this._renderPresets();
+      this._bindPresets();
+      this._showToast('Пресет переименован');
+    });
+  }
+
+  _sharePreset(idx) {
+    const preset = this.savedFilters[idx];
+    if (!preset) return;
+    // Generate a shareable URL with preset encoded in hash
+    const presetData = {
+      name: preset.name,
+      desc: preset.desc || '',
+      filters: preset.filters,
+      direction: preset.direction,
+      groupMode: preset.groupMode,
+    };
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(presetData))));
+    const shareUrl = window.location.origin + window.location.pathname + '#preset=' + encoded;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      this._showToast('Ссылка на пресет скопирована в буфер');
+    }).catch(() => {
+      // Fallback: show URL in a modal
+      this._showShareUrlModal(shareUrl);
+    });
+  }
+
+  _showShareUrlModal(url) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <h3>Ссылка на пресет</h3>
+        <p style="font-size:12px;color:${COLORS.textSecondary};margin-bottom:8px">Скопируйте ссылку и отправьте коллеге:</p>
+        <input type="text" class="js-share-url" value="${this._esc(url)}" readonly style="font-size:11px;font-family:monospace">
+        <div class="modal-actions">
+          <button class="btn-save" class="js-share-copy">Копировать</button>
+          <button class="btn-cancel" class="js-share-close">Закрыть</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.querySelector('.js-share-url').select();
+    document.querySelector('.js-share-close').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.querySelector('.js-share-copy').addEventListener('click', () => {
+      document.querySelector('.js-share-url').select();
+      document.execCommand('copy');
+      this._showToast('Скопировано');
+      overlay.remove();
+    });
+  }
+
+  _loadSharedPresetFromURL() {
+    const hash = window.location.hash;
+    if (!hash.startsWith('#preset=')) return;
+    try {
+      const encoded = hash.slice(8);
+      const json = decodeURIComponent(escape(atob(encoded)));
+      const preset = JSON.parse(json);
+      if (preset && preset.name && preset.filters) {
+        // Apply the shared preset
+        this._applyPreset(preset);
+        this._showToast(`Пресет \xab${preset.name}\xbb примен\u0451н из ссылки`);
+        // Offer to save it
+        setTimeout(() => {
+          this._showSaveSharedPresetModal(preset);
+        }, 1000);
+      }
+    } catch(e) {
+      console.warn('[RSM] Failed to load shared preset from URL:', e);
+    }
+    // Clean up the hash
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+
+  _showSaveSharedPresetModal(preset) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <h3>Сохранить пресет?</h3>
+        <p style="font-size:13px;color:${COLORS.textSecondary};margin-bottom:12px">Пресет \xab${this._esc(preset.name)}\xbb был примен\u0451н из ссылки. Сохранить его в ваши пресеты?</p>
+        <div class="modal-actions">
+          <button class="btn-cancel" class="js-shared-skip">Нет, спасибо</button>
+          <button class="btn-save" class="js-shared-save">Сохранить</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.querySelector('.js-shared-skip').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.querySelector('.js-shared-save').addEventListener('click', () => {
+      this.savedFilters.push({
+        name: preset.name,
+        desc: preset.desc || '',
+        filters: preset.filters,
+        direction: preset.direction,
+        groupMode: preset.groupMode,
+        shared: true,
+        owner: 'Получен по ссылке',
+      });
+      this._saveSaved();
+      overlay.remove();
+      this._renderPresets();
+      this._bindPresets();
+      this._showToast('Пресет сохран\u0451н');
+    });
+  }
+
+  _applyPreset(preset) {
+    if (preset.filters) {
+      this.filters.types = new Set(preset.filters.types || CI_TYPE_HIERARCHY);
+      this.filters.statuses = new Set(preset.filters.statuses || STATUSES);
+      this.filters.sites = new Set(preset.filters.sites || SITES);
+      this.filters.environments = new Set(preset.filters.environments || ENVIRONMENTS);
+    }
+    if (preset.direction) this.direction = preset.direction;
+    if (preset.groupMode !== undefined) this.groupMode = preset.groupMode;
+    this._invalidateFilterCache();
+    this._buildSidebar();
+    this._bindSidebar();
+    this._recordHistory();
+    this._refresh();
+  }
+
+  _showSaveModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <h3>Сохранить пресет фильтров</h3>
+        <input type="text" class="js-sf-name" placeholder="Название пресета">
+        <textarea class="js-sf-desc" placeholder="Описание (необязательно)"></textarea>
+        <div class="modal-actions">
+          <button class="btn-cancel" class="js-sf-cancel">Отмена</button>
+          <button class="btn-save" class="js-sf-save">Сохранить</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.querySelector('.js-sf-name').focus();
+    document.querySelector('.js-sf-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.querySelector('.js-sf-save').addEventListener('click', () => {
+      const name = document.querySelector('.js-sf-name').value.trim();
+      if (!name) { document.querySelector('.js-sf-name').style.borderColor = COLORS.danger; return; }
+      const desc = document.querySelector('.js-sf-desc').value.trim();
+      this.savedFilters.push({
+        name, desc,
+        filters: {
+          types: [...this.filters.types],
+          statuses: [...this.filters.statuses],
+          sites: [...this.filters.sites],
+          environments: [...this.filters.environments],
+        },
+        direction: this.direction,
+        groupMode: this.groupMode,
+      });
+      this._saveSaved();
+      overlay.remove();
+      this._renderPresets();
+      this._bindPresets();
+    });
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     REFRESH & UTILS
+     ═══════════════════════════════════════════════════════════════════════ */
+  _refresh() {
+    if (!this.cy) return;
+    this._invalidateFilterCache();
+    if (this.impactMode) this._exitImpactMode();
+
+    // Debounce rapid successive refreshes
+    if (this._refreshRAF) cancelAnimationFrame(this._refreshRAF);
+
+    const showLoading = () => {
+      const main = document.querySelector('.js-rsm-main');
+      let overlay = document.querySelector('.js-rsm-loading');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'rsm-loading';
+        overlay.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(244,245,247,.85);z-index:60;display:flex;align-items:center;justify-content:center;font-size:14px;color:${COLORS.textSecondary};font-family:${FONT}`;
+        overlay.textContent = 'Обновление модели...';
+        main.appendChild(overlay);
+      }
+      overlay.style.display = 'flex';
+    };
+    const hideLoading = () => {
+      const overlay = document.querySelector('.js-rsm-loading');
+      if (overlay) overlay.style.display = 'none';
+    };
+
+    // Hide Quick Actions when graph is being used, show when no root CI
+    if (this.rootCI) this._hideQuickActions(); else this._showQuickActions();
+
+    showLoading();
+    this._refreshRAF = requestAnimationFrame(() => {
+      this._refreshRAF = null;
+      this.cy.startBatch();
+      this.cy.elements().remove();
+      const els = this._buildElements();
+      this.cy.add(els);
+      this.cy.endBatch();
+      this._runLayout(false);
+      this._updateStats();
+      hideLoading();
+    });
+  }
+
+  _updateStats() {
+    const vis = this._getFiltered();
+    document.querySelector('.js-stat-nodes').textContent = this.data.nodes.length;
+    document.querySelector('.js-stat-edges').textContent = this.data.edges.length;
+    document.querySelector('.js-stat-visible').textContent = vis.length;
+  }
+
+  _loadSaved() {
+    try { return JSON.parse(localStorage.getItem('rsm_saved_filters') || '[]'); } catch { return []; }
+  }
+  _saveSaved() {
+    try { localStorage.setItem('rsm_saved_filters', JSON.stringify(this.savedFilters)); } catch {}
+  }
+
+  _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     RIGHT-CLICK CONTEXT MENU
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  _showCtxMenu(ciId, mouseEvent) {
+    const menu = document.querySelector('.js-rsm-ctx-menu');
+    const n = this._nodeIndex.get(ciId);
+    if (!menu || !n) return;
+
+    // Store current CI for menu actions
+    this._ctxMenuCiId = ciId;
+
+    // Update menu header
+    document.querySelector('.js-ctx-menu-title').textContent = n.name + ' (' + n.type + ')';
+
+    // Update incident count hint
+    const incCount = document.querySelector('.js-ctx-menu-inc-count');
+    incCount.textContent = n.incidents.length > 0 ? n.incidents.length + ' шт.' : 'нет';
+
+    // Position the menu at mouse coordinates relative to #rsm-main
+    const main = document.querySelector('.js-rsm-main');
+    const rect = main.getBoundingClientRect();
+    let x = mouseEvent.clientX - rect.left;
+    let y = mouseEvent.clientY - rect.top;
+
+    // Show menu first to measure it
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+    menu.classList.add('visible');
+
+    // Adjust if menu goes off-screen
+    const mw = menu.offsetWidth;
+    const mh = menu.offsetHeight;
+    if (x + mw > rect.width) x = rect.width - mw - 8;
+    if (y + mh > rect.height) y = rect.height - mh - 8;
+    if (x < 0) x = 8;
+    if (y < 0) y = 8;
+
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+  }
+
+  _hideCtxMenu() {
+    const menu = document.querySelector('.js-rsm-ctx-menu');
+    if (menu) menu.classList.remove('visible');
+  }
+
+  _bindCtxMenuActions() {
+    // Build model from this CI
+    document.querySelector('.js-ctx-menu-build-from')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ciId = this._ctxMenuCiId;
+      if (!ciId) return;
+      this._hideCtxMenu();
+      this.rootCI = ciId;
+      this._renderRootBadge();
+      this._invalidateFilterCache();
+      this._recordHistory();
+      this._refresh();
+      // Update the root CI input display
+      const n = this._nodeIndex.get(ciId);
+      if (n) {
+        const rootInput = document.querySelector('.js-root-ci-input');
+        if (rootInput) rootInput.value = '';
+      }
+    });
+
+    // Show related incidents
+    document.querySelector('.js-ctx-menu-incidents')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ciId = this._ctxMenuCiId;
+      if (!ciId) return;
+      this._hideCtxMenu();
+      // Open context panel and scroll to incidents section
+      this._openContextPanel(ciId);
+      // Scroll to incidents after panel opens
+      setTimeout(() => {
+        const panel = document.querySelector('.js-rsm-context-panel');
+        if (!panel) return;
+        const sections = panel.querySelectorAll('.ctx-section-title');
+        for (const sec of sections) {
+          if (sec.textContent.includes('инцидент') || sec.textContent.includes('Инцидент')) {
+            sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Flash highlight
+            sec.parentElement.style.background = COLORS.warningBg;
+            setTimeout(() => { sec.parentElement.style.background = ''; }, 1500);
+            break;
+          }
+        }
+      }, 350);
+    });
+
+    // Impact analysis from context menu
+    document.querySelector('.js-ctx-menu-impact')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ciId = this._ctxMenuCiId;
+      if (!ciId) return;
+      this._hideCtxMenu();
+      this.impactMode = true;
+      this.activeMode = 'impact';
+      this._updateModeUI();
+      this._runImpactAnalysis(ciId);
+    });
+
+    // Show details (open context panel)
+    document.querySelector('.js-ctx-menu-details')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ciId = this._ctxMenuCiId;
+      if (!ciId) return;
+      this._hideCtxMenu();
+      this._openContextPanel(ciId);
+    });
+
+    // Copy CI ID
+    document.querySelector('.js-ctx-menu-copy-id')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ciId = this._ctxMenuCiId;
+      const n = this._nodeIndex.get(ciId);
+      if (!n) return;
+      this._hideCtxMenu();
+      const text = n.name + ' | ' + n.type + ' | ' + n.id;
+      navigator.clipboard.writeText(text).then(() => {
+        // Show brief toast
+        this._showToast('Скопировано: ' + n.name);
+      }).catch(() => {
+        this._showToast('Не удалось скопировать');
+      });
+    });
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     SLA HEATMAP
+     ═══════════════════════════════════════════════════════════════════════ */
+  _applySlaHeatmap() {
+    if (!this.cy) return;
+    this.cy.startBatch();
+    if (this.slaHeatmap) {
+      this.cy.nodes('[!isGroup]').forEach(node => {
+        const ciId = node.id();
+        const nd = this._nodeIndex.get(ciId);
+        if (!nd) return;
+        const slaConf = SLA_HEATMAP[nd.sla] || SLA_HEATMAP['—'];
+        node.style({
+          'border-color': slaConf.border,
+          'border-width': 3,
+          'background-color': slaConf.color + '20',
+        });
+      });
+      // Also color group nodes by most critical SLA in group
+      this.cy.nodes('[?isGroup]').forEach(node => {
+        const groupType = node.data('groupType');
+        const nodesOfType = this.data.nodes.filter(n => n.type === groupType);
+        const slaOrder = ['99.99%','99.95%','99.9%','99.5%','99%','—'];
+        let bestSla = '—';
+        nodesOfType.forEach(n => {
+          const idx = slaOrder.indexOf(n.sla);
+          if (idx >= 0 && idx < slaOrder.indexOf(bestSla)) bestSla = n.sla;
+        });
+        const slaConf = SLA_HEATMAP[bestSla] || SLA_HEATMAP['—'];
+        node.style({
+          'border-color': slaConf.border,
+          'border-width': 3,
+          'background-color': slaConf.color + '15',
+        });
+      });
+    } else {
+      // Reset to default styles
+      this.cy.nodes('[!isGroup]').forEach(node => {
+        const ciId = node.id();
+        const nd = this._nodeIndex.get(ciId);
+        const isRoot = nd && nd.id === this.rootCI;
+        node.style({
+          'border-color': isRoot ? COLORS.accent : (CI_TYPE_COLORS[nd?.type] || COLORS.border),
+          'border-width': isRoot ? 3 : 2,
+          'background-color': isRoot ? COLORS.accentBg : '#fff',
+        });
+      });
+      this.cy.nodes('[?isGroup]').forEach(node => {
+        node.style({
+          'border-color': node.data('color') || COLORS.groupBorder,
+          'border-width': 2,
+          'background-color': (node.data('color') || COLORS.groupBg) + '15',
+        });
+      });
+    }
+    this.cy.endBatch();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     EXPORT (PNG / CSV)
+     ═══════════════════════════════════════════════════════════════════════ */
+  _exportPNG() {
+    if (!this.cy) return;
+    const png = this.cy.png({ output: 'blob', bg: COLORS.bg, scale: 2, full: true });
+    const url = URL.createObjectURL(png);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rsm_model_${new Date().toISOString().slice(0,10)}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+    this._showToast('Граф экспортирован в PNG');
+  }
+
+  _exportCSV() {
+    const vis = this._getFiltered();
+    const rows = [['ID','Имя','Тип','Статус','SLA','IP','Hostname','Площадка','Окружение','Ответственный','Инцидентов','Теги']];
+    vis.forEach(n => {
+      rows.push([
+        n.id, n.name, n.type, n.status, n.sla,
+        n.ip || '', n.hostname || '', n.site, n.environment,
+        n.responsible, n.incidentCount,
+        (n.tags || []).join(';'),
+      ]);
+    });
+    // If in impact mode, add impact-specific columns
+    if (this.impactMode && this.impactAffected.size > 0) {
+      rows[0].push('Impact_Depth', 'Impact_Source');
+      rows.slice(1).forEach((row, idx) => {
+        const ciId = vis[idx].id;
+        if (this.impactAffected.has(ciId)) {
+          row.push('affected', this.impactSourceId || '');
+        } else if (ciId === this.impactSourceId) {
+          row.push('source', '');
+        } else {
+          row.push('', '');
+        }
+      });
+    }
+    const csvContent = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rsm_data_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    this._showToast(`Экспортировано ${vis.length} CI в CSV`);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     IMPACT PATH NAVIGATOR
+     ═══════════════════════════════════════════════════════════════════════ */
+  _buildImpactPaths(bfsParent, sourceId) {
+    // Find all "leaf" affected nodes (services at the top of the chain)
+    const paths = [];
+    const serviceTypes = new Set(['ИТ-сервис', 'ИТ-система']);
+    const affected = [...this.impactAffected];
+    
+    // Prioritize service-level nodes, then sort by depth
+    const leafNodes = affected.filter(id => {
+      const nd = this._nodeIndex.get(id);
+      return nd && serviceTypes.has(nd.type);
+    });
+    // If no services found, use all affected nodes
+    const targets = leafNodes.length > 0 ? leafNodes : affected.slice(0, 20);
+    
+    targets.forEach(targetId => {
+      const chain = [];
+      let cur = targetId;
+      let depth = 0;
+      while (cur && cur !== sourceId && depth < IMPACT_MAX_DEPTH) {
+        chain.unshift(cur);
+        cur = bfsParent.get(cur);
+        depth++;
+      }
+      if (cur === sourceId) {
+        chain.unshift(sourceId);
+        const nd = this._nodeIndex.get(targetId);
+        paths.push({
+          targetId,
+          targetName: nd?.name || targetId,
+          targetType: nd?.type || '',
+          targetSla: nd?.sla || '—',
+          chain,
+          depth: chain.length - 1,
+        });
+      }
+    });
+    
+    // Sort: services first, then by depth descending
+    paths.sort((a, b) => {
+      const aIsSvc = serviceTypes.has(a.targetType) ? 0 : 1;
+      const bIsSvc = serviceTypes.has(b.targetType) ? 0 : 1;
+      if (aIsSvc !== bIsSvc) return aIsSvc - bIsSvc;
+      return b.depth - a.depth;
+    });
+    
+    return paths.slice(0, 50); // Limit to 50 paths
+  }
+
+  _showImpactPaths(bfsParent, sourceId) {
+    this._impactPaths = this._buildImpactPaths(bfsParent, sourceId);
+    this._impactCurrentPath = -1;
+    this._impactBfsParent = bfsParent;
+    
+    const panel = document.querySelector('.js-rsm-impact-paths');
+    const list = document.querySelector('.js-impact-paths-list');
+    const countEl = document.querySelector('.js-impact-paths-count');
+    if (!panel || !list) return;
+    
+    if (this._impactPaths.length === 0) {
+      panel.classList.remove('visible');
+      return;
+    }
+    
+    countEl.textContent = `(${this._impactPaths.length})`;
+    
+    let h = '';
+    this._impactPaths.forEach((p, idx) => {
+      const slaConf = SLA_HEATMAP[p.targetSla] || SLA_HEATMAP['—'];
+      const chainNames = p.chain.map(id => {
+        const nd = this._nodeIndex.get(id);
+        return nd ? nd.name : id;
+      });
+      h += `<div class="impact-path-item" data-path-idx="${idx}">
+        <div class="path-target">
+          <span>${this._esc(p.targetName)}</span>
+          <span class="path-sla" style="background:${slaConf.color}20;color:${slaConf.color}">${p.targetSla}</span>
+        </div>
+        <div class="path-chain">${chainNames.map(n => this._esc(n)).join('<span class="path-arrow">→</span>')}</div>
+        <div class="path-depth">Глубина: ${p.depth}</div>
+      </div>`;
+    });
+    list.innerHTML = h;
+    panel.classList.add('visible');
+    
+    // Bind path clicks
+    list.querySelectorAll('.impact-path-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const idx = parseInt(item.dataset.pathIdx);
+        this._highlightImpactPath(idx);
+      });
+    });
+    
+    // Bind nav buttons
+    document.querySelector('.js-path-prev')?.addEventListener('click', () => {
+      if (this._impactCurrentPath > 0) this._highlightImpactPath(this._impactCurrentPath - 1);
+    });
+    document.querySelector('.js-path-next')?.addEventListener('click', () => {
+      if (this._impactCurrentPath < this._impactPaths.length - 1) this._highlightImpactPath(this._impactCurrentPath + 1);
+    });
+    document.querySelector('.js-impact-paths-close')?.addEventListener('click', () => {
+      panel.classList.remove('visible');
+    });
+  }
+
+  _highlightImpactPath(idx) {
+    if (!this._impactPaths[idx] || !this.cy) return;
+    this._impactCurrentPath = idx;
+    const path = this._impactPaths[idx];
+    
+    // Update active state in list
+    document.querySelectorAll('.impact-path-item').forEach(el => el.classList.remove('active'));
+    const activeItem = document.querySelector(`.impact-path-item[data-path-idx="${idx}"]`);
+    if (activeItem) {
+      activeItem.classList.add('active');
+      activeItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    
+    // Update nav buttons
+    const prevBtn = document.querySelector('.js-path-prev');
+    const nextBtn = document.querySelector('.js-path-next');
+    if (prevBtn) prevBtn.disabled = idx <= 0;
+    if (nextBtn) nextBtn.disabled = idx >= this._impactPaths.length - 1;
+    
+    // Highlight the path nodes and edges in the graph
+    this.cy.startBatch();
+    // First, reset all to impact-faded
+    this.cy.elements().addClass('impact-faded').removeClass('impact-source impact-affected impact-affected-deep');
+    this.cy.edges('.impact-chain-edge').removeClass('impact-faded');
+    
+    // Highlight nodes in this path
+    const pathSet = new Set(path.chain);
+    path.chain.forEach((ciId, i) => {
+      const node = this.cy.getElementById(ciId);
+      if (node.length) {
+        node.removeClass('impact-faded');
+        if (i === 0) node.addClass('impact-source');
+        else if (i === path.chain.length - 1) node.addClass('impact-affected');
+        else node.addClass('impact-affected-deep');
+      }
+      // Also handle group nodes
+      const nd = this._nodeIndex.get(ciId);
+      if (nd && this.groupMode && !this.expandedGroups.has(nd.type)) {
+        const gNode = this.cy.getElementById('g_' + nd.type);
+        if (gNode.length) {
+          gNode.removeClass('impact-faded');
+          if (i === 0) gNode.addClass('impact-source');
+          else gNode.addClass('impact-affected');
+        }
+      }
+    });
+    
+    // Highlight edges between consecutive path nodes
+    for (let i = 0; i < path.chain.length - 1; i++) {
+      const src = path.chain[i];
+      const tgt = path.chain[i + 1];
+      // Check both regular and chain edges
+      this.cy.edges().forEach(edge => {
+        const eSrc = edge.source().id();
+        const eTgt = edge.target().id();
+        const srcMatch = eSrc === src || (this.groupMode && eSrc === 'g_' + (this._nodeIndex.get(src)?.type));
+        const tgtMatch = eTgt === tgt || (this.groupMode && eTgt === 'g_' + (this._nodeIndex.get(tgt)?.type));
+        if (srcMatch && tgtMatch) {
+          edge.removeClass('impact-faded').addClass('impact-edge');
+        }
+      });
+    }
+    
+    this.cy.endBatch();
+    
+    // Animate to fit the path nodes
+    const pathNodes = this.cy.collection();
+    path.chain.forEach(ciId => {
+      const node = this.cy.getElementById(ciId);
+      if (node.length) pathNodes.merge(node);
+      const nd = this._nodeIndex.get(ciId);
+      if (nd && this.groupMode && !this.expandedGroups.has(nd.type)) {
+        const gNode = this.cy.getElementById('g_' + nd.type);
+        if (gNode.length) pathNodes.merge(gNode);
+      }
+    });
+    if (pathNodes.length > 0) {
+      this.cy.animate({ fit: { eles: pathNodes, padding: 80 } }, { duration: 400 });
+    }
+  }
+
+  _hideImpactPaths() {
+    const panel = document.querySelector('.js-rsm-impact-paths');
+    if (panel) panel.classList.remove('visible');
+    this._impactPaths = [];
+    this._impactCurrentPath = -1;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     UPSTREAM SERVICES (for context panel)
+     ═══════════════════════════════════════════════════════════════════════ */
+  _getUpstreamServices(ciId) {
+    // BFS upward from ciId to find all ИТ-сервис / ИТ-система that depend on this CI
+    const visited = new Set([ciId]);
+    const queue = [ciId];
+    const services = [];
+    const serviceTypes = new Set(['ИТ-сервис', 'ИТ-система']);
+    let depth = 0;
+    const maxDepth = 15;
+    const depthMap = new Map([[ciId, 0]]);
+    
+    while (queue.length && depth < maxDepth) {
+      const cur = queue.shift();
+      const curDepth = depthMap.get(cur) || 0;
+      const entry = this._adjacency[cur];
+      if (!entry) continue;
+      for (const parent of entry.parents) {
+        if (!visited.has(parent)) {
+          visited.add(parent);
+          depthMap.set(parent, curDepth + 1);
+          const nd = this._nodeIndex.get(parent);
+          if (nd && serviceTypes.has(nd.type)) {
+            services.push({ id: parent, name: nd.name, type: nd.type, sla: nd.sla, depth: curDepth + 1 });
+          }
+          queue.push(parent);
+        }
+      }
+      depth = curDepth + 1;
+    }
+    return services.sort((a, b) => a.depth - b.depth).slice(0, 20);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     MODE MANAGEMENT
+     ═══════════════════════════════════════════════════════════════════════ */
+  _activateMode(mode) {
+    // If clicking the same mode, deactivate it
+    if (this.activeMode === mode) {
+      this._deactivateMode();
+      return;
+    }
+
+    // Exit previous mode if needed
+    if (this.activeMode === 'impact' && mode !== 'impact') {
+      if (this.impactMode) this._exitImpactMode();
+    }
+
+    this.activeMode = mode;
+
+    if (mode === 'model') {
+      this.direction = 'top-down';
+      this.focusTreeMode = 'down';
+      if (this.impactMode) this._exitImpactMode();
+      const rootInput = document.querySelector('.js-root-ci-input');
+      if (rootInput) {
+        rootInput.focus();
+        rootInput.placeholder = 'Введите имя ИТ-сервиса...';
+      }
+      this._buildSidebar();
+      this._bindSidebar();
+      this._showToast('Режим: Модель системы. Выберите корневой ИТ-сервис');
+    } else if (mode === 'impact') {
+      this.direction = 'bottom-up';
+      this.focusTreeMode = 'up';
+      this.impactMode = true;
+      this._buildSidebar();
+      this._bindSidebar();
+      const rootInput = document.querySelector('.js-root-ci-input');
+      if (rootInput) {
+        rootInput.focus();
+        rootInput.placeholder = 'Введите КЕ для анализа влияния...';
+      }
+      // If a node is already selected, run impact from it
+      if (this.selectedNode) {
+        this._runImpactAnalysis(this.selectedNode);
+      }
+      this._showToast('Режим: Анализ влияния. Выберите КЕ инфраструктуры');
+    }
+
+    this._updateModeUI();
+  }
+
+  _deactivateMode() {
+    if (this.activeMode === 'impact' && this.impactMode) {
+      this._exitImpactMode();
+    }
+    this.activeMode = null;
+    this._updateModeUI();
+  }
+
+  _updateModeUI() {
+    const trigger = document.querySelector('.js-mode-trigger');
+    const triggerIcon = document.querySelector('.js-mode-trigger-icon');
+    const triggerLabel = document.querySelector('.js-mode-trigger-label');
+    const optModel = document.querySelector('.js-mode-opt-model');
+    const optImpact = document.querySelector('.js-mode-opt-impact');
+
+    // Reset all
+    trigger?.classList.remove('active-model', 'active-impact');
+    optModel?.classList.remove('selected');
+    optImpact?.classList.remove('selected', 'impact-selected');
+
+    if (this.activeMode === 'model') {
+      trigger?.classList.add('active-model');
+      if (triggerIcon) triggerIcon.textContent = '🔷';
+      if (triggerLabel) triggerLabel.textContent = 'Модель';
+      optModel?.classList.add('selected');
+    } else if (this.activeMode === 'impact') {
+      trigger?.classList.add('active-impact');
+      if (triggerIcon) triggerIcon.textContent = '⚡';
+      if (triggerLabel) triggerLabel.textContent = 'Влияние';
+      optImpact?.classList.add('selected', 'impact-selected');
+    } else {
+      if (triggerIcon) triggerIcon.textContent = '◉';
+      if (triggerLabel) triggerLabel.textContent = 'Режимы';
+    }
+  }
+
+  // Legacy compat: keep these as no-ops
+  _showQuickActions() {}
+  _hideQuickActions() {}
+
+  _showToast(msg) {
+    let toast = document.querySelector('.js-rsm-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'rsm-toast';
+      toast.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:${COLORS.text};color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-family:${FONT};z-index:300;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transition:opacity .2s;pointer-events:none`;
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     SNAPSHOT / DIFF — Сравнение снимков модели
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  _loadSnapshots() {
+    try {
+      const raw = localStorage.getItem('rsm_snapshots');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  }
+
+  _saveSnapshots() {
+    try {
+      localStorage.setItem('rsm_snapshots', JSON.stringify(this._snapshots));
+    } catch (e) {
+      console.warn('[RSM] Failed to save snapshots:', e);
+    }
+  }
+
+  _takeSnapshot(name) {
+    const now = new Date();
+    const snap = {
+      id: 'snap_' + Date.now(),
+      name: name || `Снимок ${now.toLocaleDateString('ru-RU')} ${now.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'})}`,
+      timestamp: now.toISOString(),
+      nodeCount: this.data.nodes.length,
+      edgeCount: this.data.edges.length,
+      nodes: this.data.nodes.map(n => ({
+        id: n.id, name: n.name, type: n.type, status: n.status,
+        site: n.site, environment: n.environment, sla: n.sla,
+        ip: n.ip, hostname: n.hostname, tags: n.tags ? [...n.tags] : [],
+        source: n.source
+      })),
+      edges: this.data.edges.map(e => ({
+        source: e.source, target: e.target, type: e.type, label: e.label
+      })),
+      filters: {
+        rootCI: this.rootCI,
+        direction: this.direction,
+        types: [...this.filters.types],
+        groupMode: this.groupMode
+      }
+    };
+    this._snapshots.push(snap);
+    this._saveSnapshots();
+    return snap;
+  }
+
+  _deleteSnapshot(snapId) {
+    this._snapshots = this._snapshots.filter(s => s.id !== snapId);
+    this._saveSnapshots();
+  }
+
+  _openSnapshotModal() {
+    if (this._diffMode) {
+      this._exitDiffMode();
+      return;
+    }
+    this._diffSelectedSnaps = [];
+    const modal = document.querySelector('.js-rsm-snapshot-modal');
+    modal?.classList.add('visible');
+    this._renderSnapshotList();
+    this._bindSnapshotModal();
+  }
+
+  _closeSnapshotModal() {
+    document.querySelector('.js-rsm-snapshot-modal')?.classList.remove('visible');
+  }
+
+  _renderSnapshotList() {
+    const body = document.querySelector('.js-snap-modal-body');
+    if (!body) return;
+
+    const snaps = this._snapshots;
+    let html = '';
+
+    // Current state as "live" snapshot
+    html += '<div class="snap-section-label">Текущее состояние</div>';
+    html += `<div class="snap-item snap-base ${this._diffSelectedSnaps.includes('__current__') ? 'selected' : ''}" data-snap-class="js-__current__">
+      <div class="snap-radio"></div>
+      <div class="snap-info">
+        <div class="snap-name">📡 Текущая модель (live)</div>
+        <div class="snap-meta">Актуальное состояние графа</div>
+        <div class="snap-stats">${this.data.nodes.length} узлов, ${this.data.edges.length} связей</div>
+      </div>
+    </div>`;
+
+    if (snaps.length > 0) {
+      html += '<div class="snap-section-label">Сохранённые снимки</div>';
+      html += '<div class="snap-list">';
+      // Show newest first
+      [...snaps].reverse().forEach(s => {
+        const dt = new Date(s.timestamp);
+        const dateStr = dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const timeStr = dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        const sel = this._diffSelectedSnaps.includes(s.id) ? 'selected' : '';
+        html += `<div class="snap-item ${sel}" data-snap-class="js-${s.id}">
+          <div class="snap-radio"></div>
+          <div class="snap-info">
+            <div class="snap-name">${s.name}</div>
+            <div class="snap-meta">${dateStr} ${timeStr}</div>
+            <div class="snap-stats">${s.nodeCount} узлов, ${s.edgeCount} связей</div>
+          </div>
+          <button class="snap-delete" data-delete-class="js-${s.id}" title="Удалить снимок">🗑</button>
+        </div>`;
+      });
+      html += '</div>';
+    } else {
+      html += '<div class="snap-empty">Нет сохранённых снимков.<br>Сохраните текущее состояние модели для последующего сравнения.</div>';
+    }
+
+    body.innerHTML = html;
+
+    // Update compare button state
+    const compareBtn = document.querySelector('.js-snap-btn-compare');
+    if (compareBtn) {
+      compareBtn.disabled = this._diffSelectedSnaps.length !== 2;
+    }
+  }
+
+  _bindSnapshotModal() {
+    const modal = document.querySelector('.js-rsm-snapshot-modal');
+    const body = document.querySelector('.js-snap-modal-body');
+
+    // Close modal
+    document.querySelector('.js-snap-modal-close')?.addEventListener('click', () => this._closeSnapshotModal());
+    modal?.addEventListener('click', (e) => {
+      if (e.target === modal) this._closeSnapshotModal();
+    });
+
+    // Save snapshot
+    document.querySelector('.js-snap-btn-save')?.addEventListener('click', () => {
+      const name = prompt('Название снимка:', `Снимок ${new Date().toLocaleDateString('ru-RU')} ${new Date().toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'})}`);
+      if (name === null) return;
+      this._takeSnapshot(name);
+      this._showToast('📸 Снимок сохранён');
+      this._renderSnapshotList();
+      this._bindSnapshotModalItems();
+    });
+
+    // Compare button
+    document.querySelector('.js-snap-btn-compare')?.addEventListener('click', () => {
+      if (this._diffSelectedSnaps.length === 2) {
+        this._runDiffComparison(this._diffSelectedSnaps[0], this._diffSelectedSnaps[1]);
+        this._closeSnapshotModal();
+      }
+    });
+
+    this._bindSnapshotModalItems();
+  }
+
+  _bindSnapshotModalItems() {
+    const body = document.querySelector('.js-snap-modal-body');
+    if (!body) return;
+
+    // Select snapshot items
+    body.querySelectorAll('.snap-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.snap-delete')) return;
+        const snapId = item.dataset.snapId;
+        const idx = this._diffSelectedSnaps.indexOf(snapId);
+        if (idx >= 0) {
+          this._diffSelectedSnaps.splice(idx, 1);
+        } else {
+          if (this._diffSelectedSnaps.length >= 2) {
+            this._diffSelectedSnaps.shift();
+          }
+          this._diffSelectedSnaps.push(snapId);
+        }
+        this._renderSnapshotList();
+        this._bindSnapshotModalItems();
+      });
+    });
+
+    // Delete buttons
+    body.querySelectorAll('.snap-delete').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.deleteId;
+        if (confirm('Удалить этот снимок?')) {
+          this._deleteSnapshot(id);
+          this._diffSelectedSnaps = this._diffSelectedSnaps.filter(s => s !== id);
+          this._renderSnapshotList();
+          this._bindSnapshotModalItems();
+          this._showToast('Снимок удалён');
+        }
+      });
+    });
+  }
+
+  _getSnapshotData(snapId) {
+    if (snapId === '__current__') {
+      return {
+        name: 'Текущая модель',
+        nodes: this.data.nodes,
+        edges: this.data.edges
+      };
+    }
+    const snap = this._snapshots.find(s => s.id === snapId);
+    if (!snap) return null;
+    return {
+      name: snap.name,
+      nodes: snap.nodes,
+      edges: snap.edges
+    };
+  }
+
+  _runDiffComparison(snapIdA, snapIdB) {
+    const dataA = this._getSnapshotData(snapIdA);
+    const dataB = this._getSnapshotData(snapIdB);
+    if (!dataA || !dataB) {
+      this._showToast('Ошибка: снимок не найден');
+      return;
+    }
+
+    // Build node maps by ID
+    const mapA = new Map();
+    dataA.nodes.forEach(n => mapA.set(n.id, n));
+    const mapB = new Map();
+    dataB.nodes.forEach(n => mapB.set(n.id, n));
+
+    // Build edge sets
+    const edgeKey = (e) => `${e.source}|${e.target}|${e.type}`;
+    const edgesA = new Set(dataA.edges.map(edgeKey));
+    const edgesB = new Set(dataB.edges.map(edgeKey));
+
+    const added = [];    // In B but not in A
+    const removed = [];  // In A but not in B
+    const changed = [];  // In both but attributes differ
+    const unchanged = []; // Identical
+
+    // Check nodes in B (new snapshot)
+    mapB.forEach((nodeB, id) => {
+      if (!mapA.has(id)) {
+        added.push({ id, node: nodeB, reason: 'Новый CI' });
+      } else {
+        const nodeA = mapA.get(id);
+        const diffs = [];
+        if (nodeA.status !== nodeB.status) diffs.push(`статус: ${nodeA.status} → ${nodeB.status}`);
+        if (nodeA.sla !== nodeB.sla) diffs.push(`SLA: ${nodeA.sla} → ${nodeB.sla}`);
+        if (nodeA.site !== nodeB.site) diffs.push(`площадка: ${nodeA.site} → ${nodeB.site}`);
+        if (nodeA.environment !== nodeB.environment) diffs.push(`окружение: ${nodeA.environment} → ${nodeB.environment}`);
+        if (nodeA.ip !== nodeB.ip) diffs.push(`IP: ${nodeA.ip} → ${nodeB.ip}`);
+        if (nodeA.hostname !== nodeB.hostname) diffs.push(`hostname: ${nodeA.hostname} → ${nodeB.hostname}`);
+        // Check edge changes for this node
+        const nodeEdgesA = dataA.edges.filter(e => e.source === id || e.target === id).map(edgeKey);
+        const nodeEdgesB = dataB.edges.filter(e => e.source === id || e.target === id).map(edgeKey);
+        const newEdges = nodeEdgesB.filter(e => !edgesA.has(e)).length;
+        const lostEdges = nodeEdgesA.filter(e => !edgesB.has(e)).length;
+        if (newEdges > 0) diffs.push(`+${newEdges} связей`);
+        if (lostEdges > 0) diffs.push(`-${lostEdges} связей`);
+
+        if (diffs.length > 0) {
+          changed.push({ id, node: nodeB, reason: diffs.join(', ') });
+        } else {
+          unchanged.push({ id, node: nodeB });
+        }
+      }
+    });
+
+    // Check removed nodes (in A but not in B)
+    mapA.forEach((nodeA, id) => {
+      if (!mapB.has(id)) {
+        removed.push({ id, node: nodeA, reason: 'Удалён из модели' });
+      }
+    });
+
+    // Edge diff
+    const addedEdges = [...edgesB].filter(e => !edgesA.has(e));
+    const removedEdges = [...edgesA].filter(e => !edgesB.has(e));
+
+    this._diffResult = {
+      nameA: dataA.name,
+      nameB: dataB.name,
+      added, removed, changed, unchanged,
+      addedEdges, removedEdges
+    };
+
+    this._enterDiffMode();
+  }
+
+  _enterDiffMode() {
+    if (!this._diffResult) return;
+    this._diffMode = true;
+    const r = this._diffResult;
+
+    // Update banner
+    document.querySelector('.js-diff-snap-names').textContent = `«${r.nameA}» ↔ «${r.nameB}»`;
+    document.querySelector('.js-diff-added').textContent = `+${r.added.length} новых`;
+    document.querySelector('.js-diff-removed').textContent = `−${r.removed.length} удалённых`;
+    document.querySelector('.js-diff-changed').textContent = `~${r.changed.length} изменённых`;
+    document.querySelector('.js-diff-unchanged').textContent = `${r.unchanged.length} без изменений`;
+
+    document.querySelector('.js-rsm-diff-banner')?.classList.add('visible');
+    document.querySelector('.js-rsm-diff-legend')?.classList.add('visible');
+    document.querySelector('.js-btn-diff')?.classList.add('active');
+    this._hideQuickActions();
+
+    // Apply visual diff to graph nodes
+    this._applyDiffStyles();
+    this._showToast(`Сравнение: +${r.added.length} / −${r.removed.length} / ~${r.changed.length}`);
+  }
+
+  _applyDiffStyles() {
+    if (!this.cy || !this._diffResult) return;
+    const r = this._diffResult;
+
+    const addedIds = new Set(r.added.map(a => a.id));
+    const removedIds = new Set(r.removed.map(a => a.id));
+    const changedIds = new Set(r.changed.map(a => a.id));
+    const changedReasons = new Map(r.changed.map(a => [a.id, a.reason]));
+
+    // In group mode, we need to check if any node in a group is affected
+    const groupDiff = new Map(); // groupType -> { added, removed, changed, unchanged }
+
+    // Process all visible nodes
+    this.cy.nodes().forEach(node => {
+      const id = node.id();
+      const isGroup = node.data('isGroup');
+
+      if (isGroup) {
+        // For group nodes, aggregate diff status of children
+        const groupType = node.data('groupType') || id;
+        const childNodes = this.data.nodes.filter(n => n.type === groupType);
+        let gAdded = 0, gRemoved = 0, gChanged = 0, gUnchanged = 0;
+        childNodes.forEach(cn => {
+          if (addedIds.has(cn.id)) gAdded++;
+          else if (removedIds.has(cn.id)) gRemoved++;
+          else if (changedIds.has(cn.id)) gChanged++;
+          else gUnchanged++;
+        });
+
+        // Color group by dominant change
+        let color, borderColor, borderWidth;
+        if (gAdded > 0 && gAdded >= gChanged && gAdded >= gRemoved) {
+          color = '#C8E6C9'; borderColor = '#43A047'; borderWidth = 3;
+        } else if (gRemoved > 0 && gRemoved >= gChanged) {
+          color = '#FFCDD2'; borderColor = '#E53935'; borderWidth = 3;
+        } else if (gChanged > 0) {
+          color = '#FFF9C4'; borderColor = '#F9A825'; borderWidth = 3;
+        } else {
+          color = '#F5F5F5'; borderColor = '#BDBDBD'; borderWidth = 1;
+        }
+
+        node.style({
+          'background-color': color,
+          'border-color': borderColor,
+          'border-width': borderWidth,
+        });
+
+        // Add diff summary label
+        const parts = [];
+        if (gAdded) parts.push(`+${gAdded}`);
+        if (gRemoved) parts.push(`-${gRemoved}`);
+        if (gChanged) parts.push(`~${gChanged}`);
+        if (parts.length > 0) {
+          node.data('diffLabel', parts.join(' '));
+        }
+      } else {
+        // Individual node
+        if (addedIds.has(id)) {
+          node.style({
+            'background-color': '#43A047',
+            'border-color': '#2E7D32',
+            'border-width': 3,
+            'color': '#fff',
+          });
+        } else if (removedIds.has(id)) {
+          node.style({
+            'background-color': '#E53935',
+            'border-color': '#C62828',
+            'border-width': 3,
+            'color': '#fff',
+            'opacity': 0.7,
+          });
+        } else if (changedIds.has(id)) {
+          node.style({
+            'background-color': '#FFF9C4',
+            'border-color': '#F9A825',
+            'border-width': 3,
+            'color': '#333',
+          });
+        } else {
+          // Unchanged - dim it
+          node.style({
+            'opacity': 0.35,
+            'border-width': 1,
+          });
+        }
+      }
+    });
+
+    // Style edges
+    const addedEdgeSet = new Set(r.addedEdges);
+    const removedEdgeSet = new Set(r.removedEdges);
+    this.cy.edges().forEach(edge => {
+      const key = `${edge.data('source')}|${edge.data('target')}|${edge.data('edgeType') || 'depends_on'}`;
+      if (addedEdgeSet.has(key)) {
+        edge.style({ 'line-color': '#43A047', 'width': 3, 'opacity': 1, 'target-arrow-color': '#43A047' });
+      } else if (removedEdgeSet.has(key)) {
+        edge.style({ 'line-color': '#E53935', 'width': 3, 'opacity': 0.7, 'line-style': 'dashed', 'target-arrow-color': '#E53935' });
+      } else {
+        edge.style({ 'opacity': 0.15 });
+      }
+    });
+  }
+
+  _exitDiffMode() {
+    this._diffMode = false;
+    this._diffResult = null;
+    document.querySelector('.js-rsm-diff-banner')?.classList.remove('visible');
+    document.querySelector('.js-rsm-diff-legend')?.classList.remove('visible');
+    document.querySelector('.js-btn-diff')?.classList.remove('active');
+
+    // Restore normal graph styles
+    if (this.cy) {
+      this.cy.nodes().forEach(n => {
+        n.removeStyle();
+        n.removeData('diffLabel');
+      });
+      this.cy.edges().forEach(e => e.removeStyle());
+    }
+    // Re-apply SLA heatmap if active
+    if (this.slaHeatmap) this._applySlaHeatmap();
+    // Show Quick Actions if no rootCI
+    if (!this.rootCI) this._showQuickActions();
+    this._showToast('Режим сравнения отключён');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6. INIT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+window.RSMApp = RSMApp;
+
+// Global error handler to catch and log cross-origin script errors
+window.addEventListener('error', function(event) {
+  if (event.message === 'Script error.' && !event.filename) {
+    // Cross-origin script error — suppress to avoid noise
+    console.warn('[RSM] Suppressed cross-origin script error (harmless)');
+    event.preventDefault();
+    return;
+  }
+  console.error('[RSM] Uncaught error:', event.message, 'at', event.filename, ':', event.lineno);
+});
+
+window.addEventListener('unhandledrejection', function(event) {
+  console.error('[RSM] Unhandled promise rejection:', event.reason);
+  event.preventDefault();
+});
+
+window.__initRSM = function() {
+  try {
+    window.__rsmInstance = new RSMApp();
+    window.__rsmInstance.init();
+  } catch (err) {
+    console.error('[RSM] Initialization error:', err);
+  }
+};
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => window.__initRSM());
+} else {
+  window.__initRSM();
+}
+
