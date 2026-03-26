@@ -662,14 +662,14 @@ function buildDOM() {
         <button class="js-btn-undo" title="Отменить (Ctrl+Z)" disabled>↩</button>
         <button class="js-btn-redo" title="Повторить (Ctrl+Y)" disabled>↪</button>
       </div>
-      <div class="mode-dropdown" class="js-mode-dropdown">
-        <button class="mode-dropdown-trigger" class="js-mode-trigger">
-          <span class="mode-icon" class="js-mode-trigger-icon">◉</span>
+      <div class="mode-dropdown js-mode-dropdown">
+        <button class="mode-dropdown-trigger js-mode-trigger">
+          <span class="mode-icon js-mode-trigger-icon">◉</span>
           <span class="js-mode-trigger-label">Режимы</span>
           <span class="mode-arrow">▾</span>
         </button>
-        <div class="mode-dropdown-menu" class="js-mode-menu">
-          <div class="mode-option" class="js-mode-opt-model" data-mode="model">
+        <div class="mode-dropdown-menu js-mode-menu">
+          <div class="mode-option js-mode-opt-model" data-mode="model">
             <div class="mode-option-header">
               <div class="mode-option-icon model-icon">🔷</div>
               <div class="mode-option-title">Модель системы</div>
@@ -677,7 +677,7 @@ function buildDOM() {
             </div>
             <div class="mode-option-desc">Выберите ИТ-сервис и постройте дерево зависимостей сверху вниз — от сервиса к инфраструктуре</div>
           </div>
-          <div class="mode-option" class="js-mode-opt-impact" data-mode="impact">
+          <div class="mode-option js-mode-opt-impact" data-mode="impact">
             <div class="mode-option-header">
               <div class="mode-option-icon impact-icon">⚡</div>
               <div class="mode-option-title">Анализ влияния</div>
@@ -688,19 +688,19 @@ function buildDOM() {
         </div>
       </div>
       <div class="export-controls">
-        <button class="export-btn" class="js-btn-export-png" title="Экспорт в PNG">
+        <button class="export-btn js-btn-export-png" title="Экспорт в PNG">
           <span class="export-icon">📷</span> PNG
         </button>
-        <button class="export-btn" class="js-btn-export-csv" title="Экспорт в CSV">
+        <button class="export-btn js-btn-export-csv" title="Экспорт в CSV">
           <span class="export-icon">📊</span> CSV
         </button>
       </div>
-      <button class="diff-btn" class="js-btn-diff" title="Сравнение снимков модели">
+      <button class="diff-btn js-btn-diff" title="Сравнение снимков модели">
         <span class="diff-icon">🔀</span> Diff
       </button>
       <div class="zoom-controls">
         <button class="js-zoom-out" title="Уменьшить">−</button>
-        <span class="zoom-label" class="js-zoom-label">100%</span>
+        <span class="zoom-label js-zoom-label">100%</span>
         <button class="js-zoom-in" title="Увеличить">+</button>
         <button class="js-zoom-fit" title="Вписать в экран">⊡</button>
       </div>
@@ -708,17 +708,17 @@ function buildDOM() {
     <div class="js-rsm-container">
       <div class="js-rsm-sidebar">
         <div class="sidebar-header"><h3>Фильтры и настройки</h3></div>
-        <div class="sidebar-content" class="js-sidebar-content"></div>
+        <div class="sidebar-content js-sidebar-content"></div>
       </div>
       <div class="js-rsm-main">
         <button class="js-rsm-sidebar-toggle" title="Панель фильтров">☰</button>
         <div class="js-rsm-impact-banner">
-          <span class="impact-info">⚡ Impact-анализ: затронуто <span class="impact-count" class="js-impact-count">0</span> CI</span>
-          <div class="impact-chain-toggle" class="js-impact-chain-toggle">
+          <span class="impact-info">⚡ Impact-анализ: затронуто <span class="impact-count js-impact-count">0</span> CI</span>
+          <div class="impact-chain-toggle js-impact-chain-toggle">
             <button class="ict-btn active" data-mode="full" title="Показать все промежуточные слои">🔗 Полная цепочка</button>
             <button class="ict-btn" data-mode="filtered" title="Показать только выбранные типы CI">🎯 Только выбранные</button>
           </div>
-          <button class="impact-exit" class="js-impact-exit">Выйти</button>
+          <button class="impact-exit js-impact-exit">Выйти</button>
         </div>
         <div class="js-rsm-impact-paths">
           <div class="impact-paths-header">
@@ -727,49 +727,49 @@ function buildDOM() {
               <button class="js-path-prev" title="Предыдущая цепочка" disabled>◀</button>
               <button class="js-path-next" title="Следующая цепочка" disabled>▶</button>
             </div>
-            <button class="impact-paths-close" class="js-impact-paths-close" title="Закрыть">✕</button>
+            <button class="impact-paths-close js-impact-paths-close" title="Закрыть">✕</button>
           </div>
-          <div class="impact-paths-list" class="js-impact-paths-list"></div>
+          <div class="impact-paths-list js-impact-paths-list"></div>
         </div>
 
         <div class="js-rsm-cy"></div>
         <div class="js-rsm-context-panel">
           <div class="ctx-header">
-            <div class="ctx-icon" class="js-ctx-icon"></div>
+            <div class="ctx-icon js-ctx-icon"></div>
             <div class="ctx-title-area">
-              <div class="ctx-name" class="js-ctx-name">—</div>
-              <div class="ctx-type" class="js-ctx-type">—</div>
+              <div class="ctx-name js-ctx-name">—</div>
+              <div class="ctx-type js-ctx-type">—</div>
             </div>
-            <button class="ctx-close" class="js-ctx-close">✕</button>
+            <button class="ctx-close js-ctx-close">✕</button>
           </div>
           <div class="js-ctx-body"></div>
         </div>
         <div class="js-rsm-minimap">
           <canvas class="js-minimap-canvas"></canvas>
           <span class="minimap-label">Карта</span>
-          <button class="minimap-toggle" class="js-minimap-toggle" title="Свернуть/развернуть">−</button>
+          <button class="minimap-toggle js-minimap-toggle" title="Свернуть/развернуть">−</button>
         </div>
         <div class="js-rsm-ctx-menu">
-          <div class="ctx-menu-header" class="js-ctx-menu-title">CI</div>
-          <div class="ctx-menu-item" class="js-ctx-menu-build-from">
+          <div class="ctx-menu-header js-ctx-menu-title">CI</div>
+          <div class="ctx-menu-item js-ctx-menu-build-from">
             <span class="ctx-menu-icon">🔍</span>
             <span class="ctx-menu-label">Построить модель от</span>
           </div>
-          <div class="ctx-menu-item" class="js-ctx-menu-incidents">
+          <div class="ctx-menu-item js-ctx-menu-incidents">
             <span class="ctx-menu-icon">🔔</span>
             <span class="ctx-menu-label">Показать инциденты</span>
-            <span class="ctx-menu-hint" class="js-ctx-menu-inc-count"></span>
+            <span class="ctx-menu-hint js-ctx-menu-inc-count"></span>
           </div>
           <div class="ctx-menu-divider"></div>
-          <div class="ctx-menu-item" class="js-ctx-menu-impact">
+          <div class="ctx-menu-item js-ctx-menu-impact">
             <span class="ctx-menu-icon">⚡</span>
             <span class="ctx-menu-label">Impact-анализ</span>
           </div>
-          <div class="ctx-menu-item" class="js-ctx-menu-details">
+          <div class="ctx-menu-item js-ctx-menu-details">
             <span class="ctx-menu-icon">📋</span>
             <span class="ctx-menu-label">Подробности</span>
           </div>
-          <div class="ctx-menu-item" class="js-ctx-menu-copy-id">
+          <div class="ctx-menu-item js-ctx-menu-copy-id">
             <span class="ctx-menu-icon">📎</span>
             <span class="ctx-menu-label">Копировать ID</span>
           </div>
@@ -779,12 +779,12 @@ function buildDOM() {
             <span>🔀 Сравнение снимков:</span>
             <span class="js-diff-snap-names"></span>
             <span>—</span>
-            <span class="diff-stat added" class="js-diff-added">+0 новых</span>
-            <span class="diff-stat removed" class="js-diff-removed">−0 удалённых</span>
-            <span class="diff-stat changed" class="js-diff-changed">~0 изменённых</span>
-            <span class="diff-stat unchanged" class="js-diff-unchanged">0 без изменений</span>
+            <span class="diff-stat added js-diff-added">+0 новых</span>
+            <span class="diff-stat removed js-diff-removed">−0 удалённых</span>
+            <span class="diff-stat changed js-diff-changed">~0 изменённых</span>
+            <span class="diff-stat unchanged js-diff-unchanged">0 без изменений</span>
           </div>
-          <button class="diff-exit" class="js-diff-exit">Выйти</button>
+          <button class="diff-exit js-diff-exit">Выйти</button>
         </div>
         <div class="js-rsm-diff-legend">
           <div class="diff-legend-item"><div class="diff-legend-dot" style="background:#43A047"></div> Добавлен</div>
@@ -796,12 +796,12 @@ function buildDOM() {
           <div class="snapshot-dialog">
             <div class="snapshot-dialog-header">
               <h3>📸 Снимки модели</h3>
-              <button class="snapshot-dialog-close" class="js-snap-modal-close">✕</button>
+              <button class="snapshot-dialog-close js-snap-modal-close">✕</button>
             </div>
-            <div class="snapshot-dialog-body" class="js-snap-modal-body"></div>
+            <div class="snapshot-dialog-body js-snap-modal-body"></div>
             <div class="snapshot-dialog-footer">
-              <button class="snap-action-btn" class="js-snap-btn-save">📸 Сохранить текущий снимок</button>
-              <button class="snap-action-btn primary" class="js-snap-btn-compare" disabled>🔀 Сравнить выбранные</button>
+              <button class="snap-action-btn js-snap-btn-save">📸 Сохранить текущий снимок</button>
+              <button class="snap-action-btn primary js-snap-btn-compare" disabled>🔀 Сравнить выбранные</button>
             </div>
           </div>
         </div>
@@ -1010,7 +1010,7 @@ class RSMApp {
     let loadEl = document.querySelector('.js-rsm-impact-loading');
     if (!loadEl) {
       loadEl = document.createElement('div');
-      loadEl.id = 'rsm-impact-loading';
+      loadEl.classList.add('js-rsm-impact-loading');
       loadEl.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(244,245,247,.85);z-index:60;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;font-family:${FONT}`;
       loadEl.innerHTML = `<div style="font-size:14px;color:${COLORS.textSecondary}">Анализ влияния...</div><div style="font-size:11px;color:${COLORS.textMuted}" class="js-impact-progress"></div>`;
       main.appendChild(loadEl);
@@ -1239,7 +1239,7 @@ class RSMApp {
     const banner = document.querySelector('.js-rsm-impact-banner');
     const infoSpan = banner.querySelector('.impact-info');
     if (infoSpan) {
-      let text = `\u26a1 Impact-\u0430\u043d\u0430\u043b\u0438\u0437: \u0437\u0430\u0442\u0440\u043e\u043d\u0443\u0442\u043e <span class="impact-count" class="js-impact-count">${this.impactAffected.size}</span> CI, <span class="impact-count">${chainCount}</span> \u0441\u0432\u044f\u0437\u0435\u0439 \u0432\u043b\u0438\u044f\u043d\u0438\u044f`;
+      let text = `\u26a1 Impact-\u0430\u043d\u0430\u043b\u0438\u0437: \u0437\u0430\u0442\u0440\u043e\u043d\u0443\u0442\u043e <span class="impact-count js-impact-count">${this.impactAffected.size}</span> CI, <span class="impact-count">${chainCount}</span> \u0441\u0432\u044f\u0437\u0435\u0439 \u0432\u043b\u0438\u044f\u043d\u0438\u044f`;
       if (truncated) {
         text += ` <span style="color:${COLORS.warning};font-weight:600">(\u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0435\u043d\u043e: \u0433\u043b\u0443\u0431\u0438\u043d\u0430 ${IMPACT_MAX_DEPTH}, \u043c\u0430\u043a\u0441 ${IMPACT_MAX_NODES} CI)</span>`;
       }
@@ -1320,7 +1320,7 @@ class RSMApp {
     // Reset banner text
     const infoSpan = document.querySelector('.js-rsm-impact-banner .impact-info');
     if (infoSpan) {
-      infoSpan.innerHTML = `\u26a1 Impact-\u0430\u043d\u0430\u043b\u0438\u0437: \u0437\u0430\u0442\u0440\u043e\u043d\u0443\u0442\u043e <span class="impact-count" class="js-impact-count">0</span> CI`;
+      infoSpan.innerHTML = `\u26a1 Impact-\u0430\u043d\u0430\u043b\u0438\u0437: \u0437\u0430\u0442\u0440\u043e\u043d\u0443\u0442\u043e <span class="impact-count js-impact-count">0</span> CI`;
     }
     // Hide Impact Path Navigator
     this._hideImpactPaths();
@@ -1460,7 +1460,7 @@ class RSMApp {
       <div class="smart-search">
         <span class="search-icon">🔍</span>
         <input type="text" class="js-rsm-search" placeholder="Поиск: имя, IP, хост, тег, тип:сервер..." value="${this._esc(this.searchQuery)}">
-        <div class="search-hints" class="js-search-hints"></div>
+        <div class="search-hints js-search-hints"></div>
       </div>
     `);
 
@@ -1470,9 +1470,9 @@ class RSMApp {
         <label>Корневой CI (построить модель от)</label>
         <div class="root-ci-wrap">
           <input type="text" class="js-root-ci-input" placeholder="Введите имя CI..." autocomplete="off">
-          <button class="root-ci-clear ${this.rootCI ? 'visible' : ''}" class="js-root-ci-clear">✕</button>
+          <button class="root-ci-clear ${this.rootCI ? 'visible' : ''} js-root-ci-clear">✕</button>
         </div>
-        <div class="root-ci-dropdown" class="js-root-ci-dropdown"></div>
+        <div class="root-ci-dropdown js-root-ci-dropdown"></div>
         <div class="js-root-ci-badge-area"></div>
       </div>
     `);
@@ -1481,17 +1481,17 @@ class RSMApp {
     // Direction
     c.insertAdjacentHTML('beforeend', `
       <div class="direction-toggle">
-        <button class="js-dir-td" class="${this.direction==='top-down'?'active':''}">↓ Сверху вниз</button>
-        <button class="js-dir-bu" class="${this.direction==='bottom-up'?'active':''}">↑ Снизу вверх</button>
+        <button class="js-dir-td ${this.direction==='top-down'?'active':''}">↓ Сверху вниз</button>
+        <button class="js-dir-bu ${this.direction==='bottom-up'?'active':''}">↑ Снизу вверх</button>
       </div>
     `);
 
     // Focus Tree Mode toggle
     c.insertAdjacentHTML('beforeend', `
       <div class="focus-tree-toggle">
-        <button class="js-ft-off" class="${!this.focusTreeMode?'active':''}"><span class="ft-icon">🔗</span> Все связи</button>
-        <button class="js-ft-down" class="${this.focusTreeMode==='down'?'active':''}"><span class="ft-icon">🔽</span> Дерево вниз</button>
-        <button class="js-ft-up" class="${this.focusTreeMode==='up'?'active':''}"><span class="ft-icon">🔼</span> Дерево вверх</button>
+        <button class="js-ft-off ${!this.focusTreeMode?'active':''}"><span class="ft-icon">🔗</span> Все связи</button>
+        <button class="js-ft-down ${this.focusTreeMode==='down'?'active':''}"><span class="ft-icon">🔽</span> Дерево вниз</button>
+        <button class="js-ft-up ${this.focusTreeMode==='up'?'active':''}"><span class="ft-icon">🔼</span> Дерево вверх</button>
       </div>
     `);
 
@@ -1548,7 +1548,7 @@ class RSMApp {
     c.insertAdjacentHTML('beforeend', this._filterHTML('f-env','Окружение', ENVIRONMENTS, this.filters.environments));
 
     // Reset + Legend
-    c.insertAdjacentHTML('beforeend', `<button class="reset-btn" class="js-reset-filters">Сбросить все фильтры</button>`);
+    c.insertAdjacentHTML('beforeend', `<button class="reset-btn js-reset-filters">Сбросить все фильтры</button>`);
     c.insertAdjacentHTML('beforeend', `
       <div class="legend-section">
         <div class="section-title">Легенда</div>
@@ -1572,7 +1572,7 @@ class RSMApp {
       <div class="root-ci-badge">
         <span class="badge-name">${this._esc(n.name)}</span>
         <span class="badge-type">${this._esc(n.type)}</span>
-        <span class="badge-close" class="js-root-badge-close">✕</span>
+        <span class="badge-close js-root-badge-close">✕</span>
       </div>
     `;
   }
@@ -2303,7 +2303,7 @@ class RSMApp {
     // Actions
     h += `<div class="ctx-actions">
       <button class="ctx-action-btn primary" onclick="alert('Открытие карточки CI в SimpleOne')">Открыть карточку</button>
-      <button class="ctx-action-btn danger" class="js-ctx-impact-btn" data-ci="${n.id}">⚡ Impact</button>
+      <button class="ctx-action-btn danger js-ctx-impact-btn" data-ci="${n.id}">⚡ Impact</button>
     </div>`;
 
     // Attributes section
@@ -2903,8 +2903,8 @@ class RSMApp {
         <h3>${title}</h3>
         <p style="font-size:13px;color:${COLORS.textSecondary};margin-bottom:16px">${message}</p>
         <div class="modal-actions">
-          <button class="btn-cancel" class="js-confirm-cancel">Отмена</button>
-          <button class="btn-save" style="background:${COLORS.danger}" class="js-confirm-ok">Удалить</button>
+          <button class="btn-cancel js-confirm-cancel">Отмена</button>
+          <button class="btn-save js-confirm-ok" style="background:${COLORS.danger}">Удалить</button>
         </div>
       </div>
     `;
@@ -2928,8 +2928,8 @@ class RSMApp {
         <input type="text" class="js-rename-name" value="${this._esc(preset.name)}" placeholder="Название">
         <textarea class="js-rename-desc" placeholder="Описание (необязательно)">${this._esc(preset.desc || '')}</textarea>
         <div class="modal-actions">
-          <button class="btn-cancel" class="js-rename-cancel">Отмена</button>
-          <button class="btn-save" class="js-rename-save">Сохранить</button>
+          <button class="btn-cancel js-rename-cancel">Отмена</button>
+          <button class="btn-save js-rename-save">Сохранить</button>
         </div>
       </div>
     `;
@@ -2982,8 +2982,8 @@ class RSMApp {
         <p style="font-size:12px;color:${COLORS.textSecondary};margin-bottom:8px">Скопируйте ссылку и отправьте коллеге:</p>
         <input type="text" class="js-share-url" value="${this._esc(url)}" readonly style="font-size:11px;font-family:monospace">
         <div class="modal-actions">
-          <button class="btn-save" class="js-share-copy">Копировать</button>
-          <button class="btn-cancel" class="js-share-close">Закрыть</button>
+          <button class="btn-save js-share-copy">Копировать</button>
+          <button class="btn-cancel js-share-close">Закрыть</button>
         </div>
       </div>
     `;
@@ -3030,8 +3030,8 @@ class RSMApp {
         <h3>Сохранить пресет?</h3>
         <p style="font-size:13px;color:${COLORS.textSecondary};margin-bottom:12px">Пресет \xab${this._esc(preset.name)}\xbb был примен\u0451н из ссылки. Сохранить его в ваши пресеты?</p>
         <div class="modal-actions">
-          <button class="btn-cancel" class="js-shared-skip">Нет, спасибо</button>
-          <button class="btn-save" class="js-shared-save">Сохранить</button>
+          <button class="btn-cancel js-shared-skip">Нет, спасибо</button>
+          <button class="btn-save js-shared-save">Сохранить</button>
         </div>
       </div>
     `;
@@ -3081,8 +3081,8 @@ class RSMApp {
         <input type="text" class="js-sf-name" placeholder="Название пресета">
         <textarea class="js-sf-desc" placeholder="Описание (необязательно)"></textarea>
         <div class="modal-actions">
-          <button class="btn-cancel" class="js-sf-cancel">Отмена</button>
-          <button class="btn-save" class="js-sf-save">Сохранить</button>
+          <button class="btn-cancel js-sf-cancel">Отмена</button>
+          <button class="btn-save js-sf-save">Сохранить</button>
         </div>
       </div>
     `;
@@ -3128,7 +3128,7 @@ class RSMApp {
       let overlay = document.querySelector('.js-rsm-loading');
       if (!overlay) {
         overlay = document.createElement('div');
-        overlay.id = 'rsm-loading';
+        overlay.classList.add('js-rsm-loading');
         overlay.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(244,245,247,.85);z-index:60;display:flex;align-items:center;justify-content:center;font-size:14px;color:${COLORS.textSecondary};font-family:${FONT}`;
         overlay.textContent = 'Обновление модели...';
         main.appendChild(overlay);
@@ -3736,7 +3736,7 @@ class RSMApp {
     let toast = document.querySelector('.js-rsm-toast');
     if (!toast) {
       toast = document.createElement('div');
-      toast.id = 'rsm-toast';
+      toast.classList.add('js-rsm-toast');
       toast.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:${COLORS.text};color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-family:${FONT};z-index:300;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transition:opacity .2s;pointer-events:none`;
       document.body.appendChild(toast);
     }
