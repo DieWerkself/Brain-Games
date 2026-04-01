@@ -1,20 +1,20 @@
-/**
+/*
  * ============================================================================
  * SimpleOne — Модуль визуализации ресурсно-сервисной модели (РСМ)
  * ============================================================================
- * v5.2 — Рефакторинг:
- *   - Современный синтаксис ES6+ (let/const, стрелочные функции, шаблонные строки)
- *   - Привязка к элементам через CSS-классы (.js-xxx) вместо id
- *   - Все display: none в HTML-разметке обёрнуты в кавычки
- *   - Единый файл с подключением внешних библиотек в начале
- * ============================================================================
- * Внешние зависимости (подключить перед этим файлом):
- *   - Cytoscape.js 3.28.1
- *   - Dagre 0.8.5
- *   - cytoscape-dagre 2.5.0
- *   - ELK.js 0.9.2
- *   - cytoscape-elk 2.3.0
- *   - html2canvas 1.4.1
+ * v6.0 — ОПЭ + Deep Linking:
+ *   ОПЭ-1: Модель строится только при выборе корневой КЕ
+ *   ОПЭ-2: Убран блок направлений (Сверху вниз / Снизу вверх)
+ *   ОПЭ-3: Убран SLA Heatmap
+ *   ОПЭ-4: Ленивая загрузка инцидентов (только при открытии сайдбара)
+ *   ОПЭ-5: Исправлена кнопка закрытия сайдбара
+ *   ОПЭ-6: Убран экспорт в CSV
+ *   ОПЭ-7: Убраны снимки моделей и Diff
+ *   ОПЭ-8: Убраны теги и SLA из карточки КЕ
+ *   ОПЭ-9: Исправлен поиск (выбор из выпадающего списка)
+ *   Deep Linking: сохранение КЕ и фильтров в URL
+ *   Кнопка «Скопировать ссылку» в бейдже КЕ
+ *   Спиннер загрузки при построении модели
  * ============================================================================
  */
 
@@ -27,15 +27,6 @@ const IMPACT_MAX_DEPTH = 25;
 const IMPACT_MAX_NODES = 500;
 const IMPACT_MAX_CHAIN_EDGES = 300;
 
-/* SLA Heatmap colors */
-const SLA_HEATMAP = {
-  '99.99%': { color: '#2E7D32', border: '#43A047', label: 'Критичный' },
-  '99.95%': { color: '#558B2F', border: '#689F38', label: 'Высокий' },
-  '99.9%':  { color: '#F9A825', border: '#FBC02D', label: 'Средний' },
-  '99.5%':  { color: '#EF6C00', border: '#F57C00', label: 'Пониженный' },
-  '99%':    { color: '#D84315', border: '#E64A19', label: 'Низкий' },
-  '—':      { color: '#78909C', border: '#90A4AE', label: 'Не задан' },
-};
 
 const COLORS = {
   bg:            '#F4F5F7',
@@ -315,13 +306,13 @@ function injectStyles() {
     .root-ci-badge{margin-top:6px;display:flex;align-items:center;gap:6px;padding:6px 10px;background:${COLORS.accentBg};border:1px solid ${COLORS.accent};border-radius:6px}
     .root-ci-badge .badge-name{font-size:12px;font-weight:600;color:${COLORS.accent};flex:1}
     .root-ci-badge .badge-type{font-size:10px;color:${COLORS.textSecondary};font-weight:400}
+    .root-ci-badge .badge-copy{cursor:pointer;font-size:13px;color:${COLORS.accent};opacity:.6;transition:all .2s;padding:2px 4px;border-radius:3px}
+    .root-ci-badge .badge-copy:hover{opacity:1;background:${COLORS.accent};color:#fff}
     .root-ci-badge .badge-close{cursor:pointer;font-size:14px;color:${COLORS.accent};opacity:.7;transition:opacity .15s}
     .root-ci-badge .badge-close:hover{opacity:1}
+    @keyframes rsm-spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+    .rsm-spinner{width:32px;height:32px;border:3px solid ${COLORS.border};border-top-color:${COLORS.accent};border-radius:50%;animation:rsm-spin .7s linear infinite;margin-bottom:10px}
 
-    /* DIRECTION TOGGLE */
-    .direction-toggle{display:flex;gap:3px;margin-bottom:14px;background:${COLORS.bg};border-radius:8px;padding:3px}
-    .direction-toggle button{flex:1;height:30px;border:none;border-radius:6px;font-size:12px;font-family:${FONT};cursor:pointer;background:transparent;color:${COLORS.textSecondary};font-weight:500;transition:all .2s}
-    .direction-toggle button.active{background:${COLORS.surface};color:${COLORS.accent};box-shadow:0 1px 3px rgba(0,0,0,.1)}
 
     /* LAYER ZONES */
     .layer-section{margin-bottom:14px}
@@ -385,8 +376,8 @@ function injectStyles() {
     .js-rsm-main{flex:1;position:relative;overflow:hidden;background:${COLORS.bg}}
     .js-rsm-cy{width:100%;height:100%}
 
-    #rsm-sidebar-toggle{position:absolute;top:12px;left:12px;z-index:50;width:36px;height:36px;border-radius:8px;border:1px solid ${COLORS.border};background:${COLORS.surface};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;color:${COLORS.text};transition:all .15s;box-shadow:0 2px 4px rgba(0,0,0,.06)}
-    #rsm-sidebar-toggle:hover{border-color:${COLORS.accent};color:${COLORS.accent}}
+    .js-rsm-sidebar-toggle{position:absolute;top:12px;left:12px;z-index:50;width:36px;height:36px;border-radius:8px;border:1px solid ${COLORS.border};background:${COLORS.surface};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;color:${COLORS.text};transition:all .15s;box-shadow:0 2px 4px rgba(0,0,0,.06)}
+    .js-rsm-sidebar-toggle:hover{border-color:${COLORS.accent};color:${COLORS.accent}}
 
     /* IMPACT BANNER */
     .js-rsm-impact-banner{position:absolute;top:12px;left:56px;z-index:55;background:${COLORS.dangerBg};border:1px solid ${COLORS.danger};border-radius:8px;padding:8px 14px;display:none;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.1);font-size:12px;flex-wrap:wrap}
@@ -408,7 +399,7 @@ function injectStyles() {
     .ctx-header .ctx-title-area{flex:1;min-width:0}
     .ctx-header .ctx-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .ctx-header .ctx-type{font-size:11px;color:${COLORS.textSecondary}}
-    .ctx-header .ctx-close{width:30px;height:30px;border:none;background:${COLORS.bg};border-radius:6px;cursor:pointer;font-size:14px;color:${COLORS.textSecondary};display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+    .ctx-header .ctx-close{width:30px;height:30px;border:none;background:${COLORS.bg};border-radius:6px;cursor:pointer;font-size:14px;color:${COLORS.textSecondary};display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;position:relative;z-index:10}
     .ctx-header .ctx-close:hover{background:${COLORS.border};color:${COLORS.text}}
 
     .ctx-section{padding:14px 18px;border-bottom:1px solid ${COLORS.border}}
@@ -446,8 +437,8 @@ function injectStyles() {
     .incident-item .inc-date{font-size:10px;color:${COLORS.textMuted};margin-top:2px}
 
     /* STATS */
-    #rsm-stats{position:absolute;bottom:12px;left:12px;z-index:50;background:${COLORS.surface};border:1px solid ${COLORS.border};border-radius:8px;padding:6px 14px;font-size:11px;color:${COLORS.textSecondary};box-shadow:0 2px 4px rgba(0,0,0,.06);display:flex;gap:12px}
-    #rsm-stats span{font-weight:600;color:${COLORS.text}}
+    .js-rsm-stats{position:absolute;bottom:12px;left:12px;z-index:50;background:${COLORS.surface};border:1px solid ${COLORS.border};border-radius:8px;padding:6px 14px;font-size:11px;color:${COLORS.textSecondary};box-shadow:0 2px 4px rgba(0,0,0,.06);display:flex;gap:12px}
+    .js-rsm-stats span{font-weight:600;color:${COLORS.text}}
 
     /* LEGEND */
     .legend-section{margin-top:12px;padding-top:12px;border-top:1px solid ${COLORS.border}}
@@ -487,7 +478,7 @@ function injectStyles() {
 
     /* MINIMAP */
     .js-rsm-minimap{position:absolute;bottom:12px;right:12px;z-index:55;width:200px;height:150px;background:${COLORS.surface};border:1px solid ${COLORS.border};border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);overflow:hidden;cursor:crosshair;transition:opacity .2s}
-    #rsm-minimap:hover{box-shadow:0 4px 16px rgba(0,0,0,.15)}
+    .js-rsm-minimap:hover{box-shadow:0 4px 16px rgba(0,0,0,.15)}
     .js-rsm-minimap canvas{width:100%;height:100%;display:block}
     .js-rsm-minimap .minimap-label{position:absolute;top:4px;left:8px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:${COLORS.textMuted};pointer-events:none;user-select:none}
     .js-rsm-minimap .minimap-toggle{position:absolute;top:3px;right:5px;width:18px;height:18px;border:none;background:transparent;cursor:pointer;font-size:10px;color:${COLORS.textMuted};display:flex;align-items:center;justify-content:center;border-radius:3px;transition:all .15s}
@@ -582,65 +573,6 @@ function injectStyles() {
     .upstream-svc-table tr:hover td{background:${COLORS.accentBg}}
     .upstream-svc-table .svc-sla{font-weight:600;font-size:10px;padding:1px 5px;border-radius:3px}
 
-    /* DIFF MODE */
-    .diff-btn{height:32px;padding:0 12px;border:1px solid ${COLORS.border};border-radius:6px;background:${COLORS.surface};cursor:pointer;font-size:12px;font-family:${FONT};color:${COLORS.text};display:flex;align-items:center;gap:6px;transition:all .15s;font-weight:500}
-    .diff-btn:hover{border-color:#7B1FA2;color:#7B1FA2}
-    .diff-btn.active{background:#F3E5F5;border-color:#7B1FA2;color:#7B1FA2}
-    .diff-btn .diff-icon{font-size:14px}
-
-    /* Snapshot Modal */
-    .js-rsm-snapshot-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);align-items:center;justify-content:center}
-    .js-rsm-snapshot-modal.visible{display:flex}
-    .snapshot-dialog{background:${COLORS.surface};border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.2);width:560px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
-    .snapshot-dialog-header{padding:20px 24px 16px;border-bottom:1px solid ${COLORS.border};display:flex;align-items:center;justify-content:space-between}
-    .snapshot-dialog-header h3{font-size:16px;font-weight:600;color:${COLORS.text};display:flex;align-items:center;gap:8px}
-    .snapshot-dialog-close{width:28px;height:28px;border:none;background:none;cursor:pointer;font-size:16px;color:${COLORS.textSecondary};border-radius:6px;display:flex;align-items:center;justify-content:center}
-    .snapshot-dialog-close:hover{background:${COLORS.bg};color:${COLORS.text}}
-    .snapshot-dialog-body{padding:16px 24px;overflow-y:auto;flex:1}
-    .snapshot-dialog-footer{padding:16px 24px;border-top:1px solid ${COLORS.border};display:flex;gap:8px;justify-content:flex-end}
-    .snap-action-btn{height:36px;padding:0 16px;border:1px solid ${COLORS.border};border-radius:8px;background:${COLORS.surface};cursor:pointer;font-size:13px;font-family:${FONT};color:${COLORS.text};font-weight:500;transition:all .15s}
-    .snap-action-btn:hover{border-color:${COLORS.accent};color:${COLORS.accent}}
-    .snap-action-btn.primary{background:#7B1FA2;color:#fff;border-color:#7B1FA2}
-    .snap-action-btn.primary:hover{background:#6A1B9A}
-    .snap-action-btn.danger{color:${COLORS.danger};border-color:${COLORS.danger}}
-    .snap-action-btn.danger:hover{background:${COLORS.dangerBg}}
-
-    /* Snapshot list */
-    .snap-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
-    .snap-item{display:flex;align-items:center;gap:12px;padding:12px;border:2px solid ${COLORS.border};border-radius:8px;cursor:pointer;transition:all .15s}
-    .snap-item:hover{border-color:#CE93D8;background:#FAFAFA}
-    .snap-item.selected{border-color:#7B1FA2;background:#F3E5F5}
-    .snap-item.snap-base{border-style:dashed}
-    .snap-item .snap-radio{width:18px;height:18px;border:2px solid ${COLORS.border};border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
-    .snap-item.selected .snap-radio{border-color:#7B1FA2}
-    .snap-item.selected .snap-radio::after{content:'';width:10px;height:10px;border-radius:50%;background:#7B1FA2}
-    .snap-info{flex:1;min-width:0}
-    .snap-name{font-weight:600;font-size:13px;color:${COLORS.text}}
-    .snap-meta{font-size:11px;color:${COLORS.textSecondary};margin-top:2px}
-    .snap-stats{font-size:11px;color:${COLORS.textMuted};margin-top:2px}
-    .snap-delete{width:24px;height:24px;border:none;background:none;cursor:pointer;font-size:12px;color:${COLORS.textMuted};border-radius:4px;display:flex;align-items:center;justify-content:center;opacity:0;transition:all .15s}
-    .snap-item:hover .snap-delete{opacity:1}
-    .snap-delete:hover{background:${COLORS.dangerBg};color:${COLORS.danger}}
-    .snap-empty{text-align:center;padding:24px;color:${COLORS.textSecondary};font-size:13px}
-    .snap-section-label{font-size:11px;font-weight:600;color:${COLORS.textSecondary};text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px}
-
-    /* Diff Banner */
-    .js-rsm-diff-banner{display:none;position:absolute;top:0;left:0;right:0;height:44px;background:linear-gradient(135deg,#F3E5F5,#E1BEE7);border-bottom:2px solid #CE93D8;z-index:50;align-items:center;padding:0 20px;gap:12px;font-size:13px;color:#4A148C;font-weight:500}
-    .js-rsm-diff-banner.visible{display:flex}
-    .diff-banner-info{flex:1;display:flex;align-items:center;gap:8px}
-    .diff-stat{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600}
-    .diff-stat.added{background:#C8E6C9;color:#2E7D32}
-    .diff-stat.removed{background:#FFCDD2;color:#C62828}
-    .diff-stat.changed{background:#FFF9C4;color:#F57F17}
-    .diff-stat.unchanged{background:#E0E0E0;color:#616161}
-    .diff-exit{height:28px;padding:0 12px;border:1px solid #CE93D8;border-radius:6px;background:#fff;cursor:pointer;font-size:12px;font-family:${FONT};color:#7B1FA2;font-weight:500;transition:all .15s}
-    .diff-exit:hover{background:#F3E5F5}
-
-    /* Diff Legend */
-    .js-rsm-diff-legend{display:none;position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:${COLORS.surface};border:1px solid ${COLORS.border};border-radius:8px;padding:8px 16px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:50;gap:16px;align-items:center;font-size:12px}
-    .js-rsm-diff-legend.visible{display:flex}
-    .diff-legend-item{display:flex;align-items:center;gap:6px}
-    .diff-legend-dot{width:12px;height:12px;border-radius:3px}
   `;
   const s = document.createElement('style');
   s.textContent = css;
@@ -662,14 +594,14 @@ function buildDOM() {
         <button class="js-btn-undo" title="Отменить (Ctrl+Z)" disabled>↩</button>
         <button class="js-btn-redo" title="Повторить (Ctrl+Y)" disabled>↪</button>
       </div>
-      <div class="mode-dropdown js-mode-dropdown">
-        <button class="mode-dropdown-trigger js-mode-trigger">
-          <span class="mode-icon js-mode-trigger-icon">◉</span>
+      <div class="js-mode-dropdown mode-dropdown">
+        <button class="js-mode-trigger mode-dropdown-trigger">
+          <span class="js-mode-trigger-icon mode-icon">◉</span>
           <span class="js-mode-trigger-label">Режимы</span>
           <span class="mode-arrow">▾</span>
         </button>
-        <div class="mode-dropdown-menu js-mode-menu">
-          <div class="mode-option js-mode-opt-model" data-mode="model">
+        <div class="js-mode-menu mode-dropdown-menu">
+          <div class="js-mode-opt-model mode-option" data-mode="model">
             <div class="mode-option-header">
               <div class="mode-option-icon model-icon">🔷</div>
               <div class="mode-option-title">Модель системы</div>
@@ -677,7 +609,7 @@ function buildDOM() {
             </div>
             <div class="mode-option-desc">Выберите ИТ-сервис и постройте дерево зависимостей сверху вниз — от сервиса к инфраструктуре</div>
           </div>
-          <div class="mode-option js-mode-opt-impact" data-mode="impact">
+          <div class="js-mode-opt-impact mode-option" data-mode="impact">
             <div class="mode-option-header">
               <div class="mode-option-icon impact-icon">⚡</div>
               <div class="mode-option-title">Анализ влияния</div>
@@ -688,19 +620,14 @@ function buildDOM() {
         </div>
       </div>
       <div class="export-controls">
-        <button class="export-btn js-btn-export-png" title="Экспорт в PNG">
+        <button class="js-btn-export-png export-btn" title="Экспорт в PNG">
           <span class="export-icon">📷</span> PNG
         </button>
-        <button class="export-btn js-btn-export-csv" title="Экспорт в CSV">
-          <span class="export-icon">📊</span> CSV
-        </button>
       </div>
-      <button class="diff-btn js-btn-diff" title="Сравнение снимков модели">
-        <span class="diff-icon">🔀</span> Diff
-      </button>
+
       <div class="zoom-controls">
         <button class="js-zoom-out" title="Уменьшить">−</button>
-        <span class="zoom-label js-zoom-label">100%</span>
+        <span class="js-zoom-label zoom-label">100%</span>
         <button class="js-zoom-in" title="Увеличить">+</button>
         <button class="js-zoom-fit" title="Вписать в экран">⊡</button>
       </div>
@@ -708,17 +635,17 @@ function buildDOM() {
     <div class="js-rsm-container">
       <div class="js-rsm-sidebar">
         <div class="sidebar-header"><h3>Фильтры и настройки</h3></div>
-        <div class="sidebar-content js-sidebar-content"></div>
+        <div class="js-sidebar-content sidebar-content"></div>
       </div>
       <div class="js-rsm-main">
         <button class="js-rsm-sidebar-toggle" title="Панель фильтров">☰</button>
         <div class="js-rsm-impact-banner">
-          <span class="impact-info">⚡ Impact-анализ: затронуто <span class="impact-count js-impact-count">0</span> CI</span>
-          <div class="impact-chain-toggle js-impact-chain-toggle">
+          <span class="impact-info">⚡ Impact-анализ: затронуто <span class="js-impact-count impact-count">0</span> CI</span>
+          <div class="js-impact-chain-toggle impact-chain-toggle">
             <button class="ict-btn active" data-mode="full" title="Показать все промежуточные слои">🔗 Полная цепочка</button>
             <button class="ict-btn" data-mode="filtered" title="Показать только выбранные типы CI">🎯 Только выбранные</button>
           </div>
-          <button class="impact-exit js-impact-exit">Выйти</button>
+          <button class="js-impact-exit impact-exit">Выйти</button>
         </div>
         <div class="js-rsm-impact-paths">
           <div class="impact-paths-header">
@@ -727,84 +654,54 @@ function buildDOM() {
               <button class="js-path-prev" title="Предыдущая цепочка" disabled>◀</button>
               <button class="js-path-next" title="Следующая цепочка" disabled>▶</button>
             </div>
-            <button class="impact-paths-close js-impact-paths-close" title="Закрыть">✕</button>
+            <button class="js-impact-paths-close impact-paths-close" title="Закрыть">✕</button>
           </div>
-          <div class="impact-paths-list js-impact-paths-list"></div>
+          <div class="js-impact-paths-list impact-paths-list"></div>
         </div>
 
         <div class="js-rsm-cy"></div>
         <div class="js-rsm-context-panel">
           <div class="ctx-header">
-            <div class="ctx-icon js-ctx-icon"></div>
+            <div class="js-ctx-icon ctx-icon"></div>
             <div class="ctx-title-area">
-              <div class="ctx-name js-ctx-name">—</div>
-              <div class="ctx-type js-ctx-type">—</div>
+              <div class="js-ctx-name ctx-name">—</div>
+              <div class="js-ctx-type ctx-type">—</div>
             </div>
-            <button class="ctx-close js-ctx-close">✕</button>
+            <button class="js-ctx-close ctx-close" onclick="event.stopPropagation();document.querySelector('.js-rsm-context-panel')?.classList.remove('open')">✕</button>
           </div>
           <div class="js-ctx-body"></div>
         </div>
         <div class="js-rsm-minimap">
           <canvas class="js-minimap-canvas"></canvas>
           <span class="minimap-label">Карта</span>
-          <button class="minimap-toggle js-minimap-toggle" title="Свернуть/развернуть">−</button>
+          <button class="js-minimap-toggle minimap-toggle" title="Свернуть/развернуть">−</button>
         </div>
         <div class="js-rsm-ctx-menu">
-          <div class="ctx-menu-header js-ctx-menu-title">CI</div>
-          <div class="ctx-menu-item js-ctx-menu-build-from">
+          <div class="js-ctx-menu-title ctx-menu-header">CI</div>
+          <div class="js-ctx-menu-build-from ctx-menu-item">
             <span class="ctx-menu-icon">🔍</span>
             <span class="ctx-menu-label">Построить модель от</span>
           </div>
-          <div class="ctx-menu-item js-ctx-menu-incidents">
+          <div class="js-ctx-menu-incidents ctx-menu-item">
             <span class="ctx-menu-icon">🔔</span>
             <span class="ctx-menu-label">Показать инциденты</span>
-            <span class="ctx-menu-hint js-ctx-menu-inc-count"></span>
+            <span class="js-ctx-menu-inc-count ctx-menu-hint"></span>
           </div>
           <div class="ctx-menu-divider"></div>
-          <div class="ctx-menu-item js-ctx-menu-impact">
+          <div class="js-ctx-menu-impact ctx-menu-item">
             <span class="ctx-menu-icon">⚡</span>
             <span class="ctx-menu-label">Impact-анализ</span>
           </div>
-          <div class="ctx-menu-item js-ctx-menu-details">
+          <div class="js-ctx-menu-details ctx-menu-item">
             <span class="ctx-menu-icon">📋</span>
             <span class="ctx-menu-label">Подробности</span>
           </div>
-          <div class="ctx-menu-item js-ctx-menu-copy-id">
+          <div class="js-ctx-menu-copy-id ctx-menu-item">
             <span class="ctx-menu-icon">📎</span>
             <span class="ctx-menu-label">Копировать ID</span>
           </div>
         </div>
-        <div class="js-rsm-diff-banner">
-          <div class="diff-banner-info">
-            <span>🔀 Сравнение снимков:</span>
-            <span class="js-diff-snap-names"></span>
-            <span>—</span>
-            <span class="diff-stat added js-diff-added">+0 новых</span>
-            <span class="diff-stat removed js-diff-removed">−0 удалённых</span>
-            <span class="diff-stat changed js-diff-changed">~0 изменённых</span>
-            <span class="diff-stat unchanged js-diff-unchanged">0 без изменений</span>
-          </div>
-          <button class="diff-exit js-diff-exit">Выйти</button>
-        </div>
-        <div class="js-rsm-diff-legend">
-          <div class="diff-legend-item"><div class="diff-legend-dot" style="background:#43A047"></div> Добавлен</div>
-          <div class="diff-legend-item"><div class="diff-legend-dot" style="background:#E53935"></div> Удалён</div>
-          <div class="diff-legend-item"><div class="diff-legend-dot" style="background:#F9A825"></div> Изменён</div>
-          <div class="diff-legend-item"><div class="diff-legend-dot" style="background:#BDBDBD"></div> Без изменений</div>
-        </div>
-        <div class="js-rsm-snapshot-modal">
-          <div class="snapshot-dialog">
-            <div class="snapshot-dialog-header">
-              <h3>📸 Снимки модели</h3>
-              <button class="snapshot-dialog-close js-snap-modal-close">✕</button>
-            </div>
-            <div class="snapshot-dialog-body js-snap-modal-body"></div>
-            <div class="snapshot-dialog-footer">
-              <button class="snap-action-btn js-snap-btn-save">📸 Сохранить текущий снимок</button>
-              <button class="snap-action-btn primary js-snap-btn-compare" disabled>🔀 Сравнить выбранные</button>
-            </div>
-          </div>
-        </div>
+
         <div class="js-rsm-stats">
           Узлов: <span class="js-stat-nodes">0</span> &nbsp;|&nbsp;
           Связей: <span class="js-stat-edges">0</span> &nbsp;|&nbsp;
@@ -863,17 +760,11 @@ class RSMApp {
     this.collapsedLayers = new Set(); // Collapsed zone IDs
     this.dataSourceFilter = 'all'; // 'all', 'auto', 'manual'
     this.focusTreeMode = false; // Focus tree: show only one direction
-    this.slaHeatmap = false; // SLA heatmap mode
     this._impactPaths = []; // Reconstructed paths for Impact Path Navigator
     this._impactCurrentPath = -1; // Currently highlighted path index
     this._impactBfsParent = null; // BFS parent map for path reconstruction
     this._preImpactExpandedGroups = null; // Saved groups before impact auto-expand
 
-    // v5.1: Diff / Snapshot comparison
-    this._snapshots = this._loadSnapshots();
-    this._diffMode = false;
-    this._diffResult = null; // { added, removed, changed, unchanged }
-    this._diffSelectedSnaps = []; // [snapId1, snapId2] for comparison
   }
 
   init() {
@@ -888,7 +779,27 @@ class RSMApp {
     this._bindCtxMenuActions();
     this._recordHistory(); // Record initial state
     this._loadSharedPresetFromURL(); // Check for shared preset in URL
-    if (!this.rootCI) this._showQuickActions();
+    // Deep linking: load rootCI and filters from URL parameters
+    const loadedFromURL = this._loadFromURL();
+    if (loadedFromURL) {
+      // Rebuild sidebar to reflect loaded filter state
+      this._buildSidebar();
+      this._bindSidebar();
+    }
+    // OPE #1: Only show graph when rootCI is selected
+    if (!this.rootCI) {
+      this._showQuickActions();
+      // Clear graph on initial load
+      if (this.cy) {
+        this.cy.startBatch();
+        this.cy.elements().remove();
+        this.cy.endBatch();
+        this._updateStats();
+      }
+    } else {
+      // rootCI loaded from URL — trigger refresh to build the model
+      this._refresh();
+    }
     console.log('[RSM] Initialized. Nodes:', this.data.nodes.length, '| Edges:', this.data.edges.length);
   }
 
@@ -945,6 +856,7 @@ class RSMApp {
     this._buildSidebar();
     this._bindSidebar();
     this._refresh();
+    this._updateURL();
     this._skipHistory = false;
     this._updateHistoryButtons();
   }
@@ -958,6 +870,7 @@ class RSMApp {
     this._buildSidebar();
     this._bindSidebar();
     this._refresh();
+    this._updateURL();
     this._skipHistory = false;
     this._updateHistoryButtons();
   }
@@ -1010,7 +923,7 @@ class RSMApp {
     let loadEl = document.querySelector('.js-rsm-impact-loading');
     if (!loadEl) {
       loadEl = document.createElement('div');
-      loadEl.classList.add('js-rsm-impact-loading');
+      loadEl.className = 'js-rsm-impact-loading';
       loadEl.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(244,245,247,.85);z-index:60;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;font-family:${FONT}`;
       loadEl.innerHTML = `<div style="font-size:14px;color:${COLORS.textSecondary}">Анализ влияния...</div><div style="font-size:11px;color:${COLORS.textMuted}" class="js-impact-progress"></div>`;
       main.appendChild(loadEl);
@@ -1239,7 +1152,7 @@ class RSMApp {
     const banner = document.querySelector('.js-rsm-impact-banner');
     const infoSpan = banner.querySelector('.impact-info');
     if (infoSpan) {
-      let text = `\u26a1 Impact-\u0430\u043d\u0430\u043b\u0438\u0437: \u0437\u0430\u0442\u0440\u043e\u043d\u0443\u0442\u043e <span class="impact-count js-impact-count">${this.impactAffected.size}</span> CI, <span class="impact-count">${chainCount}</span> \u0441\u0432\u044f\u0437\u0435\u0439 \u0432\u043b\u0438\u044f\u043d\u0438\u044f`;
+      let text = `\u26a1 Impact-\u0430\u043d\u0430\u043b\u0438\u0437: \u0437\u0430\u0442\u0440\u043e\u043d\u0443\u0442\u043e <span class="js-impact-count impact-count">${this.impactAffected.size}</span> CI, <span class="impact-count">${chainCount}</span> \u0441\u0432\u044f\u0437\u0435\u0439 \u0432\u043b\u0438\u044f\u043d\u0438\u044f`;
       if (truncated) {
         text += ` <span style="color:${COLORS.warning};font-weight:600">(\u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0435\u043d\u043e: \u0433\u043b\u0443\u0431\u0438\u043d\u0430 ${IMPACT_MAX_DEPTH}, \u043c\u0430\u043a\u0441 ${IMPACT_MAX_NODES} CI)</span>`;
       }
@@ -1249,7 +1162,7 @@ class RSMApp {
       infoSpan.innerHTML = text;
     }
     // Update toggle active state
-    document.querySelectorAll('#impact-chain-toggle .ict-btn').forEach(b => {
+    document.querySelectorAll('.js-impact-chain-toggle .ict-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.mode === this.impactChainMode);
     });
     banner.classList.add('visible');
@@ -1311,7 +1224,7 @@ class RSMApp {
     this.impactAffected.clear();
     this.impactChainMode = 'full'; // Reset to default
     // Reset toggle UI
-    document.querySelectorAll('#impact-chain-toggle .ict-btn').forEach(b => {
+    document.querySelectorAll('.js-impact-chain-toggle .ict-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.mode === 'full');
     });
     this.activeMode = null;
@@ -1320,7 +1233,7 @@ class RSMApp {
     // Reset banner text
     const infoSpan = document.querySelector('.js-rsm-impact-banner .impact-info');
     if (infoSpan) {
-      infoSpan.innerHTML = `\u26a1 Impact-\u0430\u043d\u0430\u043b\u0438\u0437: \u0437\u0430\u0442\u0440\u043e\u043d\u0443\u0442\u043e <span class="impact-count js-impact-count">0</span> CI`;
+      infoSpan.innerHTML = `\u26a1 Impact-\u0430\u043d\u0430\u043b\u0438\u0437: \u0437\u0430\u0442\u0440\u043e\u043d\u0443\u0442\u043e <span class="js-impact-count impact-count">0</span> CI`;
     }
     // Hide Impact Path Navigator
     this._hideImpactPaths();
@@ -1460,7 +1373,7 @@ class RSMApp {
       <div class="smart-search">
         <span class="search-icon">🔍</span>
         <input type="text" class="js-rsm-search" placeholder="Поиск: имя, IP, хост, тег, тип:сервер..." value="${this._esc(this.searchQuery)}">
-        <div class="search-hints js-search-hints"></div>
+        <div class="js-search-hints search-hints"></div>
       </div>
     `);
 
@@ -1470,30 +1383,17 @@ class RSMApp {
         <label>Корневой CI (построить модель от)</label>
         <div class="root-ci-wrap">
           <input type="text" class="js-root-ci-input" placeholder="Введите имя CI..." autocomplete="off">
-          <button class="root-ci-clear ${this.rootCI ? 'visible' : ''} js-root-ci-clear">✕</button>
+          <button class="js-root-ci-clear root-ci-clear ${this.rootCI ? 'visible' : ''}">✕</button>
         </div>
-        <div class="root-ci-dropdown js-root-ci-dropdown"></div>
+        <div class="js-root-ci-dropdown root-ci-dropdown"></div>
         <div class="js-root-ci-badge-area"></div>
       </div>
     `);
     this._renderRootBadge();
 
-    // Direction
-    c.insertAdjacentHTML('beforeend', `
-      <div class="direction-toggle">
-        <button class="js-dir-td ${this.direction==='top-down'?'active':''}">↓ Сверху вниз</button>
-        <button class="js-dir-bu ${this.direction==='bottom-up'?'active':''}">↑ Снизу вверх</button>
-      </div>
-    `);
+    // Direction toggle removed (OPE #2) — direction is set automatically by mode
 
-    // Focus Tree Mode toggle
-    c.insertAdjacentHTML('beforeend', `
-      <div class="focus-tree-toggle">
-        <button class="js-ft-off ${!this.focusTreeMode?'active':''}"><span class="ft-icon">🔗</span> Все связи</button>
-        <button class="js-ft-down ${this.focusTreeMode==='down'?'active':''}"><span class="ft-icon">🔽</span> Дерево вниз</button>
-        <button class="js-ft-up ${this.focusTreeMode==='up'?'active':''}"><span class="ft-icon">🔼</span> Дерево вверх</button>
-      </div>
-    `);
+    // Focus Tree Mode toggle removed (OPE #2)
 
     // Group toggle
     c.insertAdjacentHTML('beforeend', `
@@ -1502,20 +1402,7 @@ class RSMApp {
       </div>
     `);
 
-    // SLA Heatmap toggle
-    c.insertAdjacentHTML('beforeend', `
-      <div class="group-toggle-row">
-        <label><input type="checkbox" class="js-sla-heatmap-toggle" ${this.slaHeatmap?'checked':''}> SLA Heatmap</label>
-      </div>
-    `);
-    if (this.slaHeatmap) {
-      let slaLegendHTML = '<div class="sla-legend">';
-      Object.entries(SLA_HEATMAP).forEach(([val, cfg]) => {
-        slaLegendHTML += `<div class="sla-legend-item"><div class="sla-legend-dot" style="background:${cfg.color}"></div>${val}</div>`;
-      });
-      slaLegendHTML += '</div>';
-      c.insertAdjacentHTML('beforeend', slaLegendHTML);
-    }
+    // SLA Heatmap removed (OPE #3)
 
     // Layer Zones (Collapsible)
     let layerHTML = '<div class="layer-section"><div class="section-title" data-sec="layers"><span class="arrow" data-sec="layers">▼</span> Слои (зонирование)</div><div class="section-body" data-sec="layers">';
@@ -1548,7 +1435,7 @@ class RSMApp {
     c.insertAdjacentHTML('beforeend', this._filterHTML('f-env','Окружение', ENVIRONMENTS, this.filters.environments));
 
     // Reset + Legend
-    c.insertAdjacentHTML('beforeend', `<button class="reset-btn js-reset-filters">Сбросить все фильтры</button>`);
+    c.insertAdjacentHTML('beforeend', `<button class="js-reset-filters reset-btn">Сбросить все фильтры</button>`);
     c.insertAdjacentHTML('beforeend', `
       <div class="legend-section">
         <div class="section-title">Легенда</div>
@@ -1572,9 +1459,27 @@ class RSMApp {
       <div class="root-ci-badge">
         <span class="badge-name">${this._esc(n.name)}</span>
         <span class="badge-type">${this._esc(n.type)}</span>
-        <span class="badge-close js-root-badge-close">✕</span>
+        <span class="js-root-badge-copy badge-copy" title="Скопировать ссылку">🔗</span>
+        <span class="js-root-badge-close badge-close">✕</span>
       </div>
     `;
+    // Bind copy link button
+    document.querySelector('.js-root-badge-copy')?.addEventListener('click', () => {
+      this._updateURL();
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        this._showToast('Ссылка скопирована в буфер обмена');
+      }).catch(() => {
+        // Fallback for older browsers
+        const ta = document.createElement('textarea');
+        ta.value = window.location.href;
+        ta.style.cssText = 'position:fixed;left:-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        this._showToast('Ссылка скопирована в буфер обмена');
+      });
+    });
   }
 
   _filterHTML(id, title, items, activeSet, colors=false) {
@@ -1708,7 +1613,7 @@ class RSMApp {
     let h = `<div class="search-syntax">Найдено: ${matches.length}${matches.length >= 50 ? '+' : ''} CI. Синтаксис: <code>тип:сервер</code> <code>ip:10.0</code> <code>хост:srv</code> <code>тег:core</code></div>`;
     matches.forEach(n => {
       const tagsStr = (n.tags || []).slice(0, 2).join(', ');
-      h += `<div class="search-hint-item" data-hint-class="js-${n.id}">
+      h += `<div class="search-hint-item" data-hint-id="${n.id}">
         <span class="hint-dot" style="background:${CI_TYPE_COLORS[n.type]}"></span>
         <span class="hint-name">${this._esc(n.name)}</span>
         <span class="hint-type">${this._esc(n.type)}</span>
@@ -2303,7 +2208,7 @@ class RSMApp {
     // Actions
     h += `<div class="ctx-actions">
       <button class="ctx-action-btn primary" onclick="alert('Открытие карточки CI в SimpleOne')">Открыть карточку</button>
-      <button class="ctx-action-btn danger js-ctx-impact-btn" data-ci="${n.id}">⚡ Impact</button>
+      <button class="js-ctx-impact-btn ctx-action-btn danger" data-ci="${n.id}">⚡ Impact</button>
     </div>`;
 
     // Attributes section
@@ -2312,10 +2217,8 @@ class RSMApp {
       <div class="ctx-row"><span class="ctx-label">Статус</span><span class="ctx-value"><span class="ctx-badge ${statusClass}">${this._esc(n.status)}</span></span></div>
       <div class="ctx-row"><span class="ctx-label">Окружение</span><span class="ctx-value">${this._esc(n.environment)}</span></div>
       <div class="ctx-row"><span class="ctx-label">Площадка</span><span class="ctx-value">${this._esc(n.site)}</span></div>
-      <div class="ctx-row"><span class="ctx-label">SLA</span><span class="ctx-value">${this._esc(n.sla)}</span></div>
       <div class="ctx-row"><span class="ctx-label">IP-адрес</span><span class="ctx-value" style="font-family:monospace;font-size:12px">${this._esc(n.ip || '—')}</span></div>
       <div class="ctx-row"><span class="ctx-label">Hostname</span><span class="ctx-value" style="font-family:monospace;font-size:12px">${this._esc(n.hostname || '—')}</span></div>
-      <div class="ctx-row"><span class="ctx-label">Теги</span><span class="ctx-value">${(n.tags || []).map(t => `<span style="display:inline-block;font-size:10px;background:${COLORS.accentBg};color:${COLORS.accent};padding:1px 6px;border-radius:3px;margin:1px 2px">${this._esc(t)}</span>`).join('') || '—'}</span></div>
       <div class="ctx-row"><span class="ctx-label">Последнее обновление</span><span class="ctx-value">${this._esc(n.lastUpdate)}</span></div>
       <div class="ctx-row"><span class="ctx-label">Источник данных</span><span class="ctx-value"><span class="ctx-badge ${n.dataSource}">${n.dataSource === 'auto' ? '⚡ Автоматический' : '✏️ Ручной'}</span></span></div>
     </div>`;
@@ -2327,28 +2230,11 @@ class RSMApp {
       <div class="ctx-row"><span class="ctx-label">Описание</span><span class="ctx-value">${this._esc(n.description)}</span></div>
     </div>`;
 
-    // Incidents section
-    h += `<div class="ctx-section">
-      <div class="ctx-section-title">Открытые инциденты (${n.incidents.length})</div>`;
-    if (n.incidents.length === 0) {
-      h += `<div style="font-size:12px;color:${COLORS.textMuted};padding:4px 0">Нет открытых инцидентов</div>`;
-    } else {
-      n.incidents.forEach(inc => {
-        let prClass = 'low';
-        if (inc.priority === 'Критический') prClass = 'crit';
-        else if (inc.priority === 'Высокий') prClass = 'high';
-        else if (inc.priority === 'Средний') prClass = 'med';
-        h += `<div class="incident-item">
-          <div class="inc-header">
-            <span class="inc-id">${this._esc(inc.id)}</span>
-            <span class="inc-priority ${prClass}">${this._esc(inc.priority)}</span>
-          </div>
-          <div class="inc-title">${this._esc(inc.title)}</div>
-          <div class="inc-date">${this._esc(inc.date)}</div>
-        </div>`;
-      });
-    }
-    h += '</div>';
+    // Incidents section — lazy loaded (OPE #4)
+    h += `<div class="js-ctx-incidents-section ctx-section">
+      <div class="ctx-section-title">Открытые инциденты <span class="js-ctx-inc-count"></span></div>
+      <div class="js-ctx-incidents-container" style="font-size:12px;color:${COLORS.textMuted};padding:4px 0">Загрузка инцидентов...</div>
+    </div>`;
 
     // Dependencies section
     const entry = this._adjacency[n.id];
@@ -2371,11 +2257,12 @@ class RSMApp {
           <thead><tr><th>Сервис</th><th>Тип</th><th>SLA</th><th>Глубина</th></tr></thead>
           <tbody>`;
       upstreamSvcs.forEach(svc => {
-        const slaConf = SLA_HEATMAP[svc.sla] || SLA_HEATMAP['—'];
-        h += `<tr class="upstream-svc-row" data-svc-class="js-${svc.id}">
+        const slaColorMap = {'99.99%':'#2E7D32','99.95%':'#558B2F','99.9%':'#F9A825','99.5%':'#EF6C00','99%':'#D84315','—':'#78909C'};
+        const slaClr = slaColorMap[svc.sla] || '#78909C';
+        h += `<tr class="upstream-svc-row" data-svc-id="${svc.id}">
           <td>${this._esc(svc.name)}</td>
           <td style="font-size:10px;color:${COLORS.textMuted}">${this._esc(svc.type)}</td>
-          <td><span class="svc-sla" style="background:${slaConf.color}20;color:${slaConf.color}">${svc.sla}</span></td>
+          <td><span class="svc-sla" style="background:${slaClr}20;color:${slaClr}">${svc.sla}</span></td>
           <td style="text-align:center;color:${COLORS.textMuted}">${svc.depth}</td>
         </tr>`;
       });
@@ -2384,6 +2271,9 @@ class RSMApp {
 
     body.innerHTML = h;
     panel.classList.add('open');
+
+    // Lazy-load incidents (OPE #4)
+    this._loadIncidentsForPanel(n);
 
     // Bind impact button in context panel
     const impBtn = document.querySelector('.js-ctx-impact-btn');
@@ -2403,6 +2293,36 @@ class RSMApp {
         if (svcId) this._openContextPanel(svcId);
       });
     });
+  }
+
+  _loadIncidentsForPanel(n) {
+    // Simulate async loading of incidents (OPE #4)
+    setTimeout(() => {
+      const container = document.querySelector('.js-ctx-incidents-container');
+      const countSpan = document.querySelector('.js-ctx-inc-count');
+      if (!container) return;
+      if (countSpan) countSpan.textContent = `(${n.incidents.length})`;
+      if (n.incidents.length === 0) {
+        container.innerHTML = `<div style="font-size:12px;color:${COLORS.textMuted};padding:4px 0">Нет открытых инцидентов</div>`;
+      } else {
+        let ih = '';
+        n.incidents.forEach(inc => {
+          let prClass = 'low';
+          if (inc.priority === 'Критический') prClass = 'crit';
+          else if (inc.priority === 'Высокий') prClass = 'high';
+          else if (inc.priority === 'Средний') prClass = 'med';
+          ih += `<div class="incident-item">
+            <div class="inc-header">
+              <span class="inc-id">${this._esc(inc.id)}</span>
+              <span class="inc-priority ${prClass}">${this._esc(inc.priority)}</span>
+            </div>
+            <div class="inc-title">${this._esc(inc.title)}</div>
+            <div class="inc-date">${this._esc(inc.date)}</div>
+          </div>`;
+        });
+        container.innerHTML = ih;
+      }
+    }, 300);
   }
 
   _closeContextPanel() {
@@ -2543,6 +2463,9 @@ class RSMApp {
     // btn-impact removed, mode dropdown handles this now
     document.querySelector('.js-impact-exit')?.addEventListener('click', () => this._exitImpactMode());
 
+    // Context panel close button (OPE #5)
+    document.querySelector('.js-ctx-close')?.addEventListener('click', () => this._closeContextPanel());
+
     // Impact chain mode toggle
     document.querySelector('.js-impact-chain-toggle')?.querySelectorAll('.ict-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2550,7 +2473,7 @@ class RSMApp {
         if (mode === this.impactChainMode) return;
         this.impactChainMode = mode;
         // Update active state
-        document.querySelectorAll('#impact-chain-toggle .ict-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.js-impact-chain-toggle .ict-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         // Re-run impact with current source
         if (this.impactSourceId) {
@@ -2560,7 +2483,7 @@ class RSMApp {
     });
     // Export buttons
     document.querySelector('.js-btn-export-png')?.addEventListener('click', () => this._exportPNG());
-    document.querySelector('.js-btn-export-csv')?.addEventListener('click', () => this._exportCSV());
+    // CSV export removed (OPE #6)
 
     // Mode Dropdown
     const modeDropdown = document.querySelector('.js-mode-dropdown');
@@ -2587,9 +2510,7 @@ class RSMApp {
       modeDropdown?.classList.remove('open');
     });
 
-    // Diff button
-    document.querySelector('.js-btn-diff')?.addEventListener('click', () => this._openSnapshotModal());
-    document.querySelector('.js-diff-exit')?.addEventListener('click', () => this._exitDiffMode());
+    // Diff/Snapshot removed (OPE #7)
   }
 
   _bindSidebar() {
@@ -2624,38 +2545,58 @@ class RSMApp {
         setTimeout(() => hints?.classList.remove('open'), 200);
       });
     }
-    // Search hint clicks
+    // Search hint clicks (OPE #9: set rootCI and build model from selected CI)
     hints?.addEventListener('mousedown', e => {
       const item = e.target.closest('.search-hint-item');
       if (!item) return;
       e.preventDefault();
       const ciId = item.dataset.hintId;
       hints.classList.remove('open');
-      // Focus on this node
-      if (this.cy) {
-        const node = this.cy.getElementById(ciId);
-        if (node.length) {
-          this.cy.animate({ center: { eles: node }, zoom: 1.5 }, { duration: 400 });
-          node.addClass('highlighted');
-          setTimeout(() => node.removeClass('highlighted'), 2000);
-        } else {
-          // Node might be in a collapsed group — expand it
-          const nd = this._nodeIndex.get(ciId);
-          if (nd) {
-            this.expandedGroups.add(nd.type);
-            this._refresh();
-            setTimeout(() => {
-              const n2 = this.cy?.$('#' + ciId);
-              if (n2?.length) {
-                this.cy.animate({ center: { eles: n2 }, zoom: 1.5 }, { duration: 400 });
-                n2.addClass('highlighted');
-                setTimeout(() => n2.removeClass('highlighted'), 2000);
-              }
-            }, 500);
+      if (searchInput) searchInput.value = '';
+
+      // Set rootCI to the selected CI and rebuild model
+      this.rootCI = ciId;
+      this._renderRootBadge();
+      this._invalidateFilterCache();
+      this._recordHistory();
+      this._updateURL();
+      this._refresh();
+
+      // After refresh, focus on the node and open context panel
+      setTimeout(() => {
+        if (this.cy) {
+          const node = this.cy.getElementById(ciId);
+          if (node.length) {
+            this.cy.animate({ center: { eles: node }, zoom: 1.5 }, { duration: 400 });
+            node.addClass('highlighted');
+            setTimeout(() => node.removeClass('highlighted'), 2000);
+          } else {
+            const nd = this._nodeIndex.get(ciId);
+            if (nd) {
+              this.expandedGroups.add(nd.type);
+              this._refresh();
+              setTimeout(() => {
+                const n2 = this.cy?.$('#' + ciId);
+                if (n2?.length) {
+                  this.cy.animate({ center: { eles: n2 }, zoom: 1.5 }, { duration: 400 });
+                  n2.addClass('highlighted');
+                  setTimeout(() => n2.removeClass('highlighted'), 2000);
+                }
+              }, 500);
+            }
           }
+          this._openContextPanel(ciId);
         }
-        this._openContextPanel(ciId);
-      }
+        // Re-bind badge close
+        document.querySelector('.js-root-badge-close')?.addEventListener('click', () => {
+          this.rootCI = null;
+          this._renderRootBadge();
+          this._invalidateFilterCache();
+          this._recordHistory();
+          this._updateURL();
+          this._refresh();
+        });
+      }, 300);
     });
 
     // Root CI
@@ -2680,6 +2621,7 @@ class RSMApp {
         this._renderRootBadge();
         this._invalidateFilterCache();
         this._recordHistory();
+        this._updateURL();
         this._refresh();
         // Auto-trigger Impact when rootCI selected in impact mode
         if (this.impactMode && this.rootCI) {
@@ -2691,6 +2633,7 @@ class RSMApp {
           this._renderRootBadge();
           this._invalidateFilterCache();
           this._recordHistory();
+          this._updateURL();
           this._refresh();
         });
       });
@@ -2700,6 +2643,7 @@ class RSMApp {
       this._renderRootBadge();
       this._invalidateFilterCache();
       this._recordHistory();
+      this._updateURL();
       this._refresh();
     });
     // Bind existing badge close
@@ -2708,70 +2652,24 @@ class RSMApp {
       this._renderRootBadge();
       this._invalidateFilterCache();
       this._recordHistory();
+      this._updateURL();
       this._refresh();
     });
 
-    // Direction
-    document.querySelector('.js-dir-td')?.addEventListener('click', () => {
-      if (this.direction === 'top-down') return;
-      this.direction = 'top-down';
-      document.querySelector('.js-dir-td').classList.add('active');
-      document.querySelector('.js-dir-bu').classList.remove('active');
-      this._invalidateFilterCache();
-      this._recordHistory();
-      this._refresh();
-    });
-    document.querySelector('.js-dir-bu')?.addEventListener('click', () => {
-      if (this.direction === 'bottom-up') return;
-      this.direction = 'bottom-up';
-      document.querySelector('.js-dir-bu').classList.add('active');
-      document.querySelector('.js-dir-td').classList.remove('active');
-      this._invalidateFilterCache();
-      this._recordHistory();
-      this._refresh();
-    });
+    // Direction toggle handlers removed (OPE #2)
 
-    // Focus Tree Mode
-    document.querySelector('.js-ft-off')?.addEventListener('click', () => {
-      this.focusTreeMode = false;
-      document.querySelectorAll('.focus-tree-toggle button').forEach(b => b.classList.remove('active'));
-      document.querySelector('.js-ft-off').classList.add('active');
-      this._invalidateFilterCache();
-      this._recordHistory();
-      this._refresh();
-    });
-    document.querySelector('.js-ft-down')?.addEventListener('click', () => {
-      this.focusTreeMode = 'down';
-      document.querySelectorAll('.focus-tree-toggle button').forEach(b => b.classList.remove('active'));
-      document.querySelector('.js-ft-down').classList.add('active');
-      this._invalidateFilterCache();
-      this._recordHistory();
-      this._refresh();
-    });
-    document.querySelector('.js-ft-up')?.addEventListener('click', () => {
-      this.focusTreeMode = 'up';
-      document.querySelectorAll('.focus-tree-toggle button').forEach(b => b.classList.remove('active'));
-      document.querySelector('.js-ft-up').classList.add('active');
-      this._invalidateFilterCache();
-      this._recordHistory();
-      this._refresh();
-    });
+    // Focus Tree Mode handlers removed (OPE #2)
 
     // Group toggle
     document.querySelector('.js-group-toggle')?.addEventListener('change', e => {
       this.groupMode = e.target.checked;
       this._invalidateFilterCache();
       this._recordHistory();
+      this._updateURL();
       this._refresh();
     });
 
-    // SLA Heatmap toggle
-    document.querySelector('.js-sla-heatmap-toggle')?.addEventListener('change', e => {
-      this.slaHeatmap = e.target.checked;
-      this._buildSidebar();
-      this._bindSidebar();
-      this._applySlaHeatmap();
-    });
+    // SLA Heatmap toggle removed (OPE #3)
 
     // Layer zones
     sc.querySelectorAll('[data-zone]').forEach(cb => {
@@ -2811,6 +2709,7 @@ class RSMApp {
         this._filterDebounce = setTimeout(() => {
           this._invalidateFilterCache();
           this._recordHistory();
+          this._updateURL();
           this._refresh();
         }, 300);
       });
@@ -2847,6 +2746,7 @@ class RSMApp {
       this._buildSidebar();
       this._bindSidebar();
       this._recordHistory();
+      this._updateURL();
       this._refresh();
     });
   }
@@ -2903,8 +2803,8 @@ class RSMApp {
         <h3>${title}</h3>
         <p style="font-size:13px;color:${COLORS.textSecondary};margin-bottom:16px">${message}</p>
         <div class="modal-actions">
-          <button class="btn-cancel js-confirm-cancel">Отмена</button>
-          <button class="btn-save js-confirm-ok" style="background:${COLORS.danger}">Удалить</button>
+          <button class="js-confirm-cancel btn-cancel">Отмена</button>
+          <button class="btn-save" style="background:${COLORS.danger}" class="js-confirm-ok">Удалить</button>
         </div>
       </div>
     `;
@@ -2928,8 +2828,8 @@ class RSMApp {
         <input type="text" class="js-rename-name" value="${this._esc(preset.name)}" placeholder="Название">
         <textarea class="js-rename-desc" placeholder="Описание (необязательно)">${this._esc(preset.desc || '')}</textarea>
         <div class="modal-actions">
-          <button class="btn-cancel js-rename-cancel">Отмена</button>
-          <button class="btn-save js-rename-save">Сохранить</button>
+          <button class="js-rename-cancel btn-cancel">Отмена</button>
+          <button class="js-rename-save btn-save">Сохранить</button>
         </div>
       </div>
     `;
@@ -2982,8 +2882,8 @@ class RSMApp {
         <p style="font-size:12px;color:${COLORS.textSecondary};margin-bottom:8px">Скопируйте ссылку и отправьте коллеге:</p>
         <input type="text" class="js-share-url" value="${this._esc(url)}" readonly style="font-size:11px;font-family:monospace">
         <div class="modal-actions">
-          <button class="btn-save js-share-copy">Копировать</button>
-          <button class="btn-cancel js-share-close">Закрыть</button>
+          <button class="js-share-copy btn-save">Копировать</button>
+          <button class="js-share-close btn-cancel">Закрыть</button>
         </div>
       </div>
     `;
@@ -3030,8 +2930,8 @@ class RSMApp {
         <h3>Сохранить пресет?</h3>
         <p style="font-size:13px;color:${COLORS.textSecondary};margin-bottom:12px">Пресет \xab${this._esc(preset.name)}\xbb был примен\u0451н из ссылки. Сохранить его в ваши пресеты?</p>
         <div class="modal-actions">
-          <button class="btn-cancel js-shared-skip">Нет, спасибо</button>
-          <button class="btn-save js-shared-save">Сохранить</button>
+          <button class="js-shared-skip btn-cancel">Нет, спасибо</button>
+          <button class="js-shared-save btn-save">Сохранить</button>
         </div>
       </div>
     `;
@@ -3069,6 +2969,7 @@ class RSMApp {
     this._buildSidebar();
     this._bindSidebar();
     this._recordHistory();
+    this._updateURL();
     this._refresh();
   }
 
@@ -3081,8 +2982,8 @@ class RSMApp {
         <input type="text" class="js-sf-name" placeholder="Название пресета">
         <textarea class="js-sf-desc" placeholder="Описание (необязательно)"></textarea>
         <div class="modal-actions">
-          <button class="btn-cancel js-sf-cancel">Отмена</button>
-          <button class="btn-save js-sf-save">Сохранить</button>
+          <button class="js-sf-cancel btn-cancel">Отмена</button>
+          <button class="js-sf-save btn-save">Сохранить</button>
         </div>
       </div>
     `;
@@ -3128,9 +3029,9 @@ class RSMApp {
       let overlay = document.querySelector('.js-rsm-loading');
       if (!overlay) {
         overlay = document.createElement('div');
-        overlay.classList.add('js-rsm-loading');
-        overlay.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(244,245,247,.85);z-index:60;display:flex;align-items:center;justify-content:center;font-size:14px;color:${COLORS.textSecondary};font-family:${FONT}`;
-        overlay.textContent = 'Обновление модели...';
+        overlay.className = 'js-rsm-loading';
+        overlay.style.cssText = `position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(244,245,247,.85);z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:14px;color:${COLORS.textSecondary};font-family:${FONT}`;
+        overlay.innerHTML = '<div class="rsm-spinner"></div><div>Построение модели...</div>';
         main.appendChild(overlay);
       }
       overlay.style.display = 'flex';
@@ -3140,8 +3041,20 @@ class RSMApp {
       if (overlay) overlay.style.display = 'none';
     };
 
-    // Hide Quick Actions when graph is being used, show when no root CI
-    if (this.rootCI) this._hideQuickActions(); else this._showQuickActions();
+    // OPE #1: Model requires rootCI selection
+    if (this.rootCI) {
+      this._hideQuickActions();
+    } else {
+      this._showQuickActions();
+      // If no rootCI, clear graph and show prompt
+      this.cy.startBatch();
+      this.cy.elements().remove();
+      this.cy.endBatch();
+      this._updateStats();
+      const hideL = () => { const o = document.querySelector('.js-rsm-loading'); if (o) o.style.display = 'none'; };
+      hideL();
+      return;
+    }
 
     showLoading();
     this._refreshRAF = requestAnimationFrame(() => {
@@ -3161,7 +3074,8 @@ class RSMApp {
     const vis = this._getFiltered();
     document.querySelector('.js-stat-nodes').textContent = this.data.nodes.length;
     document.querySelector('.js-stat-edges').textContent = this.data.edges.length;
-    document.querySelector('.js-stat-visible').textContent = vis.length;
+    // OPE #1: Show 0 visible when no rootCI selected
+    document.querySelector('.js-stat-visible').textContent = this.rootCI ? vis.length : 0;
   }
 
   _loadSaved() {
@@ -3192,7 +3106,7 @@ class RSMApp {
     const incCount = document.querySelector('.js-ctx-menu-inc-count');
     incCount.textContent = n.incidents.length > 0 ? n.incidents.length + ' шт.' : 'нет';
 
-    // Position the menu at mouse coordinates relative to #rsm-main
+    // Position the menu at mouse coordinates relative to .js-rsm-main
     const main = document.querySelector('.js-rsm-main');
     const rect = main.getBoundingClientRect();
     let x = mouseEvent.clientX - rect.left;
@@ -3231,6 +3145,7 @@ class RSMApp {
       this._renderRootBadge();
       this._invalidateFilterCache();
       this._recordHistory();
+      this._updateURL();
       this._refresh();
       // Update the root CI input display
       const n = this._nodeIndex.get(ciId);
@@ -3303,66 +3218,9 @@ class RSMApp {
     });
   }
 
-  /* ═══════════════════════════════════════════════════════════════════════
-     SLA HEATMAP
-     ═══════════════════════════════════════════════════════════════════════ */
-  _applySlaHeatmap() {
-    if (!this.cy) return;
-    this.cy.startBatch();
-    if (this.slaHeatmap) {
-      this.cy.nodes('[!isGroup]').forEach(node => {
-        const ciId = node.id();
-        const nd = this._nodeIndex.get(ciId);
-        if (!nd) return;
-        const slaConf = SLA_HEATMAP[nd.sla] || SLA_HEATMAP['—'];
-        node.style({
-          'border-color': slaConf.border,
-          'border-width': 3,
-          'background-color': slaConf.color + '20',
-        });
-      });
-      // Also color group nodes by most critical SLA in group
-      this.cy.nodes('[?isGroup]').forEach(node => {
-        const groupType = node.data('groupType');
-        const nodesOfType = this.data.nodes.filter(n => n.type === groupType);
-        const slaOrder = ['99.99%','99.95%','99.9%','99.5%','99%','—'];
-        let bestSla = '—';
-        nodesOfType.forEach(n => {
-          const idx = slaOrder.indexOf(n.sla);
-          if (idx >= 0 && idx < slaOrder.indexOf(bestSla)) bestSla = n.sla;
-        });
-        const slaConf = SLA_HEATMAP[bestSla] || SLA_HEATMAP['—'];
-        node.style({
-          'border-color': slaConf.border,
-          'border-width': 3,
-          'background-color': slaConf.color + '15',
-        });
-      });
-    } else {
-      // Reset to default styles
-      this.cy.nodes('[!isGroup]').forEach(node => {
-        const ciId = node.id();
-        const nd = this._nodeIndex.get(ciId);
-        const isRoot = nd && nd.id === this.rootCI;
-        node.style({
-          'border-color': isRoot ? COLORS.accent : (CI_TYPE_COLORS[nd?.type] || COLORS.border),
-          'border-width': isRoot ? 3 : 2,
-          'background-color': isRoot ? COLORS.accentBg : '#fff',
-        });
-      });
-      this.cy.nodes('[?isGroup]').forEach(node => {
-        node.style({
-          'border-color': node.data('color') || COLORS.groupBorder,
-          'border-width': 2,
-          'background-color': (node.data('color') || COLORS.groupBg) + '15',
-        });
-      });
-    }
-    this.cy.endBatch();
-  }
 
   /* ═══════════════════════════════════════════════════════════════════════
-     EXPORT (PNG / CSV)
+     EXPORT (PNG)
      ═══════════════════════════════════════════════════════════════════════ */
   _exportPNG() {
     if (!this.cy) return;
@@ -3376,42 +3234,6 @@ class RSMApp {
     this._showToast('Граф экспортирован в PNG');
   }
 
-  _exportCSV() {
-    const vis = this._getFiltered();
-    const rows = [['ID','Имя','Тип','Статус','SLA','IP','Hostname','Площадка','Окружение','Ответственный','Инцидентов','Теги']];
-    vis.forEach(n => {
-      rows.push([
-        n.id, n.name, n.type, n.status, n.sla,
-        n.ip || '', n.hostname || '', n.site, n.environment,
-        n.responsible, n.incidentCount,
-        (n.tags || []).join(';'),
-      ]);
-    });
-    // If in impact mode, add impact-specific columns
-    if (this.impactMode && this.impactAffected.size > 0) {
-      rows[0].push('Impact_Depth', 'Impact_Source');
-      rows.slice(1).forEach((row, idx) => {
-        const ciId = vis[idx].id;
-        if (this.impactAffected.has(ciId)) {
-          row.push('affected', this.impactSourceId || '');
-        } else if (ciId === this.impactSourceId) {
-          row.push('source', '');
-        } else {
-          row.push('', '');
-        }
-      });
-    }
-    const csvContent = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `rsm_data_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    this._showToast(`Экспортировано ${vis.length} CI в CSV`);
-  }
 
   /* ═══════════════════════════════════════════════════════════════════════
      IMPACT PATH NAVIGATOR
@@ -3483,7 +3305,8 @@ class RSMApp {
     
     let h = '';
     this._impactPaths.forEach((p, idx) => {
-      const slaConf = SLA_HEATMAP[p.targetSla] || SLA_HEATMAP['—'];
+      const slaColorMap = {'99.99%':'#2E7D32','99.95%':'#558B2F','99.9%':'#F9A825','99.5%':'#EF6C00','99%':'#D84315','—':'#78909C'};
+      const slaConf = { color: slaColorMap[p.targetSla] || '#78909C' };
       const chainNames = p.chain.map(id => {
         const nd = this._nodeIndex.get(id);
         return nd ? nd.name : id;
@@ -3729,14 +3552,153 @@ class RSMApp {
   }
 
   // Legacy compat: keep these as no-ops
-  _showQuickActions() {}
-  _hideQuickActions() {}
+  _showQuickActions() {
+    let qa = document.querySelector('.js-rsm-quick-actions');
+    if (!qa) {
+      qa = document.createElement('div');
+      qa.className = 'js-rsm-quick-actions';
+      qa.style.cssText = `position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:40;text-align:center;font-family:${FONT};pointer-events:none`;
+      qa.innerHTML = `
+        <div style="font-size:48px;margin-bottom:16px;opacity:.3">🔍</div>
+        <div style="font-size:18px;font-weight:600;color:${COLORS.text};margin-bottom:8px">Выберите конфигурационную единицу</div>
+        <div style="font-size:14px;color:${COLORS.textSecondary};max-width:400px;line-height:1.5">Используйте поиск или поле &laquo;Корневая КЕ&raquo; в левой панели, чтобы построить модель зависимостей</div>
+      `;
+      document.querySelector('.js-rsm-main')?.appendChild(qa);
+    }
+    qa.style.display = 'block';
+  }
+
+  _hideQuickActions() {
+    const qa = document.querySelector('.js-rsm-quick-actions');
+    if (qa) qa.style.display = 'none';
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     DEEP LINKING — Сохранение выбранной КЕ в URL
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  _updateURL() {
+    const url = new URL(window.location);
+    // CI parameter
+    if (this.rootCI) {
+      const n = this._nodeIndex.get(this.rootCI);
+      if (n) {
+        url.searchParams.set('ci', n.name);
+      } else {
+        url.searchParams.delete('ci');
+      }
+    } else {
+      url.searchParams.delete('ci');
+    }
+    // Filters: only save non-default values to keep URL short
+    const allTypes = new Set(CI_TYPE_HIERARCHY);
+    const allStatuses = new Set(STATUSES);
+    const allSites = new Set(SITES);
+    const allEnvs = new Set(ENVIRONMENTS);
+    // Types
+    if (this.filters.types.size !== allTypes.size || ![...this.filters.types].every(t => allTypes.has(t))) {
+      url.searchParams.set('types', [...this.filters.types].map(t => CI_TYPE_HIERARCHY.indexOf(t)).filter(i => i >= 0).join(','));
+    } else {
+      url.searchParams.delete('types');
+    }
+    // Statuses
+    if (this.filters.statuses.size !== allStatuses.size || ![...this.filters.statuses].every(s => allStatuses.has(s))) {
+      url.searchParams.set('statuses', [...this.filters.statuses].map(s => STATUSES.indexOf(s)).filter(i => i >= 0).join(','));
+    } else {
+      url.searchParams.delete('statuses');
+    }
+    // Sites
+    if (this.filters.sites.size !== allSites.size || ![...this.filters.sites].every(s => allSites.has(s))) {
+      url.searchParams.set('sites', [...this.filters.sites].map(s => SITES.indexOf(s)).filter(i => i >= 0).join(','));
+    } else {
+      url.searchParams.delete('sites');
+    }
+    // Environments
+    if (this.filters.environments.size !== allEnvs.size || ![...this.filters.environments].every(e => allEnvs.has(e))) {
+      url.searchParams.set('envs', [...this.filters.environments].map(e => ENVIRONMENTS.indexOf(e)).filter(i => i >= 0).join(','));
+    } else {
+      url.searchParams.delete('envs');
+    }
+    // Group mode
+    if (!this.groupMode) {
+      url.searchParams.set('group', '0');
+    } else {
+      url.searchParams.delete('group');
+    }
+    window.history.replaceState(null, '', url.toString());
+  }
+
+  _loadFromURL() {
+    const url = new URL(window.location);
+    let changed = false;
+    // CI
+    const ciName = url.searchParams.get('ci');
+    if (ciName) {
+      const found = this.data.nodes.find(n => n.name.toLowerCase() === ciName.toLowerCase());
+      if (found) {
+        this.rootCI = found.id;
+        this._renderRootBadge();
+        this._invalidateFilterCache();
+        changed = true;
+      }
+    }
+    // Types
+    const typesParam = url.searchParams.get('types');
+    if (typesParam !== null) {
+      const indices = typesParam.split(',').map(Number).filter(i => i >= 0 && i < CI_TYPE_HIERARCHY.length);
+      if (indices.length > 0) {
+        this.filters.types = new Set(indices.map(i => CI_TYPE_HIERARCHY[i]));
+        changed = true;
+      }
+    }
+    // Statuses
+    const statusParam = url.searchParams.get('statuses');
+    if (statusParam !== null) {
+      const indices = statusParam.split(',').map(Number).filter(i => i >= 0 && i < STATUSES.length);
+      if (indices.length > 0) {
+        this.filters.statuses = new Set(indices.map(i => STATUSES[i]));
+        changed = true;
+      }
+    }
+    // Sites
+    const sitesParam = url.searchParams.get('sites');
+    if (sitesParam !== null) {
+      const indices = sitesParam.split(',').map(Number).filter(i => i >= 0 && i < SITES.length);
+      if (indices.length > 0) {
+        this.filters.sites = new Set(indices.map(i => SITES[i]));
+        changed = true;
+      }
+    }
+    // Environments
+    const envsParam = url.searchParams.get('envs');
+    if (envsParam !== null) {
+      const indices = envsParam.split(',').map(Number).filter(i => i >= 0 && i < ENVIRONMENTS.length);
+      if (indices.length > 0) {
+        this.filters.environments = new Set(indices.map(i => ENVIRONMENTS[i]));
+        changed = true;
+      }
+    }
+    // Group mode
+    const groupParam = url.searchParams.get('group');
+    if (groupParam === '0') {
+      this.groupMode = false;
+      changed = true;
+    }
+    if (changed) {
+      this._invalidateFilterCache();
+    }
+    return changed;
+  }
+
+  _loadRootCIFromURL() {
+    return this._loadFromURL();
+  }
 
   _showToast(msg) {
     let toast = document.querySelector('.js-rsm-toast');
     if (!toast) {
       toast = document.createElement('div');
-      toast.classList.add('js-rsm-toast');
+      toast.className = 'js-rsm-toast';
       toast.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:${COLORS.text};color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-family:${FONT};z-index:300;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transition:opacity .2s;pointer-events:none`;
       document.body.appendChild(toast);
     }
@@ -3744,435 +3706,6 @@ class RSMApp {
     toast.style.opacity = '1';
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     SNAPSHOT / DIFF — Сравнение снимков модели
-     ═══════════════════════════════════════════════════════════════════════ */
-
-  _loadSnapshots() {
-    try {
-      const raw = localStorage.getItem('rsm_snapshots');
-      return raw ? JSON.parse(raw) : [];
-    } catch { return []; }
-  }
-
-  _saveSnapshots() {
-    try {
-      localStorage.setItem('rsm_snapshots', JSON.stringify(this._snapshots));
-    } catch (e) {
-      console.warn('[RSM] Failed to save snapshots:', e);
-    }
-  }
-
-  _takeSnapshot(name) {
-    const now = new Date();
-    const snap = {
-      id: 'snap_' + Date.now(),
-      name: name || `Снимок ${now.toLocaleDateString('ru-RU')} ${now.toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'})}`,
-      timestamp: now.toISOString(),
-      nodeCount: this.data.nodes.length,
-      edgeCount: this.data.edges.length,
-      nodes: this.data.nodes.map(n => ({
-        id: n.id, name: n.name, type: n.type, status: n.status,
-        site: n.site, environment: n.environment, sla: n.sla,
-        ip: n.ip, hostname: n.hostname, tags: n.tags ? [...n.tags] : [],
-        source: n.source
-      })),
-      edges: this.data.edges.map(e => ({
-        source: e.source, target: e.target, type: e.type, label: e.label
-      })),
-      filters: {
-        rootCI: this.rootCI,
-        direction: this.direction,
-        types: [...this.filters.types],
-        groupMode: this.groupMode
-      }
-    };
-    this._snapshots.push(snap);
-    this._saveSnapshots();
-    return snap;
-  }
-
-  _deleteSnapshot(snapId) {
-    this._snapshots = this._snapshots.filter(s => s.id !== snapId);
-    this._saveSnapshots();
-  }
-
-  _openSnapshotModal() {
-    if (this._diffMode) {
-      this._exitDiffMode();
-      return;
-    }
-    this._diffSelectedSnaps = [];
-    const modal = document.querySelector('.js-rsm-snapshot-modal');
-    modal?.classList.add('visible');
-    this._renderSnapshotList();
-    this._bindSnapshotModal();
-  }
-
-  _closeSnapshotModal() {
-    document.querySelector('.js-rsm-snapshot-modal')?.classList.remove('visible');
-  }
-
-  _renderSnapshotList() {
-    const body = document.querySelector('.js-snap-modal-body');
-    if (!body) return;
-
-    const snaps = this._snapshots;
-    let html = '';
-
-    // Current state as "live" snapshot
-    html += '<div class="snap-section-label">Текущее состояние</div>';
-    html += `<div class="snap-item snap-base ${this._diffSelectedSnaps.includes('__current__') ? 'selected' : ''}" data-snap-class="js-__current__">
-      <div class="snap-radio"></div>
-      <div class="snap-info">
-        <div class="snap-name">📡 Текущая модель (live)</div>
-        <div class="snap-meta">Актуальное состояние графа</div>
-        <div class="snap-stats">${this.data.nodes.length} узлов, ${this.data.edges.length} связей</div>
-      </div>
-    </div>`;
-
-    if (snaps.length > 0) {
-      html += '<div class="snap-section-label">Сохранённые снимки</div>';
-      html += '<div class="snap-list">';
-      // Show newest first
-      [...snaps].reverse().forEach(s => {
-        const dt = new Date(s.timestamp);
-        const dateStr = dt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const timeStr = dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-        const sel = this._diffSelectedSnaps.includes(s.id) ? 'selected' : '';
-        html += `<div class="snap-item ${sel}" data-snap-class="js-${s.id}">
-          <div class="snap-radio"></div>
-          <div class="snap-info">
-            <div class="snap-name">${s.name}</div>
-            <div class="snap-meta">${dateStr} ${timeStr}</div>
-            <div class="snap-stats">${s.nodeCount} узлов, ${s.edgeCount} связей</div>
-          </div>
-          <button class="snap-delete" data-delete-class="js-${s.id}" title="Удалить снимок">🗑</button>
-        </div>`;
-      });
-      html += '</div>';
-    } else {
-      html += '<div class="snap-empty">Нет сохранённых снимков.<br>Сохраните текущее состояние модели для последующего сравнения.</div>';
-    }
-
-    body.innerHTML = html;
-
-    // Update compare button state
-    const compareBtn = document.querySelector('.js-snap-btn-compare');
-    if (compareBtn) {
-      compareBtn.disabled = this._diffSelectedSnaps.length !== 2;
-    }
-  }
-
-  _bindSnapshotModal() {
-    const modal = document.querySelector('.js-rsm-snapshot-modal');
-    const body = document.querySelector('.js-snap-modal-body');
-
-    // Close modal
-    document.querySelector('.js-snap-modal-close')?.addEventListener('click', () => this._closeSnapshotModal());
-    modal?.addEventListener('click', (e) => {
-      if (e.target === modal) this._closeSnapshotModal();
-    });
-
-    // Save snapshot
-    document.querySelector('.js-snap-btn-save')?.addEventListener('click', () => {
-      const name = prompt('Название снимка:', `Снимок ${new Date().toLocaleDateString('ru-RU')} ${new Date().toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'})}`);
-      if (name === null) return;
-      this._takeSnapshot(name);
-      this._showToast('📸 Снимок сохранён');
-      this._renderSnapshotList();
-      this._bindSnapshotModalItems();
-    });
-
-    // Compare button
-    document.querySelector('.js-snap-btn-compare')?.addEventListener('click', () => {
-      if (this._diffSelectedSnaps.length === 2) {
-        this._runDiffComparison(this._diffSelectedSnaps[0], this._diffSelectedSnaps[1]);
-        this._closeSnapshotModal();
-      }
-    });
-
-    this._bindSnapshotModalItems();
-  }
-
-  _bindSnapshotModalItems() {
-    const body = document.querySelector('.js-snap-modal-body');
-    if (!body) return;
-
-    // Select snapshot items
-    body.querySelectorAll('.snap-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        if (e.target.closest('.snap-delete')) return;
-        const snapId = item.dataset.snapId;
-        const idx = this._diffSelectedSnaps.indexOf(snapId);
-        if (idx >= 0) {
-          this._diffSelectedSnaps.splice(idx, 1);
-        } else {
-          if (this._diffSelectedSnaps.length >= 2) {
-            this._diffSelectedSnaps.shift();
-          }
-          this._diffSelectedSnaps.push(snapId);
-        }
-        this._renderSnapshotList();
-        this._bindSnapshotModalItems();
-      });
-    });
-
-    // Delete buttons
-    body.querySelectorAll('.snap-delete').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = btn.dataset.deleteId;
-        if (confirm('Удалить этот снимок?')) {
-          this._deleteSnapshot(id);
-          this._diffSelectedSnaps = this._diffSelectedSnaps.filter(s => s !== id);
-          this._renderSnapshotList();
-          this._bindSnapshotModalItems();
-          this._showToast('Снимок удалён');
-        }
-      });
-    });
-  }
-
-  _getSnapshotData(snapId) {
-    if (snapId === '__current__') {
-      return {
-        name: 'Текущая модель',
-        nodes: this.data.nodes,
-        edges: this.data.edges
-      };
-    }
-    const snap = this._snapshots.find(s => s.id === snapId);
-    if (!snap) return null;
-    return {
-      name: snap.name,
-      nodes: snap.nodes,
-      edges: snap.edges
-    };
-  }
-
-  _runDiffComparison(snapIdA, snapIdB) {
-    const dataA = this._getSnapshotData(snapIdA);
-    const dataB = this._getSnapshotData(snapIdB);
-    if (!dataA || !dataB) {
-      this._showToast('Ошибка: снимок не найден');
-      return;
-    }
-
-    // Build node maps by ID
-    const mapA = new Map();
-    dataA.nodes.forEach(n => mapA.set(n.id, n));
-    const mapB = new Map();
-    dataB.nodes.forEach(n => mapB.set(n.id, n));
-
-    // Build edge sets
-    const edgeKey = (e) => `${e.source}|${e.target}|${e.type}`;
-    const edgesA = new Set(dataA.edges.map(edgeKey));
-    const edgesB = new Set(dataB.edges.map(edgeKey));
-
-    const added = [];    // In B but not in A
-    const removed = [];  // In A but not in B
-    const changed = [];  // In both but attributes differ
-    const unchanged = []; // Identical
-
-    // Check nodes in B (new snapshot)
-    mapB.forEach((nodeB, id) => {
-      if (!mapA.has(id)) {
-        added.push({ id, node: nodeB, reason: 'Новый CI' });
-      } else {
-        const nodeA = mapA.get(id);
-        const diffs = [];
-        if (nodeA.status !== nodeB.status) diffs.push(`статус: ${nodeA.status} → ${nodeB.status}`);
-        if (nodeA.sla !== nodeB.sla) diffs.push(`SLA: ${nodeA.sla} → ${nodeB.sla}`);
-        if (nodeA.site !== nodeB.site) diffs.push(`площадка: ${nodeA.site} → ${nodeB.site}`);
-        if (nodeA.environment !== nodeB.environment) diffs.push(`окружение: ${nodeA.environment} → ${nodeB.environment}`);
-        if (nodeA.ip !== nodeB.ip) diffs.push(`IP: ${nodeA.ip} → ${nodeB.ip}`);
-        if (nodeA.hostname !== nodeB.hostname) diffs.push(`hostname: ${nodeA.hostname} → ${nodeB.hostname}`);
-        // Check edge changes for this node
-        const nodeEdgesA = dataA.edges.filter(e => e.source === id || e.target === id).map(edgeKey);
-        const nodeEdgesB = dataB.edges.filter(e => e.source === id || e.target === id).map(edgeKey);
-        const newEdges = nodeEdgesB.filter(e => !edgesA.has(e)).length;
-        const lostEdges = nodeEdgesA.filter(e => !edgesB.has(e)).length;
-        if (newEdges > 0) diffs.push(`+${newEdges} связей`);
-        if (lostEdges > 0) diffs.push(`-${lostEdges} связей`);
-
-        if (diffs.length > 0) {
-          changed.push({ id, node: nodeB, reason: diffs.join(', ') });
-        } else {
-          unchanged.push({ id, node: nodeB });
-        }
-      }
-    });
-
-    // Check removed nodes (in A but not in B)
-    mapA.forEach((nodeA, id) => {
-      if (!mapB.has(id)) {
-        removed.push({ id, node: nodeA, reason: 'Удалён из модели' });
-      }
-    });
-
-    // Edge diff
-    const addedEdges = [...edgesB].filter(e => !edgesA.has(e));
-    const removedEdges = [...edgesA].filter(e => !edgesB.has(e));
-
-    this._diffResult = {
-      nameA: dataA.name,
-      nameB: dataB.name,
-      added, removed, changed, unchanged,
-      addedEdges, removedEdges
-    };
-
-    this._enterDiffMode();
-  }
-
-  _enterDiffMode() {
-    if (!this._diffResult) return;
-    this._diffMode = true;
-    const r = this._diffResult;
-
-    // Update banner
-    document.querySelector('.js-diff-snap-names').textContent = `«${r.nameA}» ↔ «${r.nameB}»`;
-    document.querySelector('.js-diff-added').textContent = `+${r.added.length} новых`;
-    document.querySelector('.js-diff-removed').textContent = `−${r.removed.length} удалённых`;
-    document.querySelector('.js-diff-changed').textContent = `~${r.changed.length} изменённых`;
-    document.querySelector('.js-diff-unchanged').textContent = `${r.unchanged.length} без изменений`;
-
-    document.querySelector('.js-rsm-diff-banner')?.classList.add('visible');
-    document.querySelector('.js-rsm-diff-legend')?.classList.add('visible');
-    document.querySelector('.js-btn-diff')?.classList.add('active');
-    this._hideQuickActions();
-
-    // Apply visual diff to graph nodes
-    this._applyDiffStyles();
-    this._showToast(`Сравнение: +${r.added.length} / −${r.removed.length} / ~${r.changed.length}`);
-  }
-
-  _applyDiffStyles() {
-    if (!this.cy || !this._diffResult) return;
-    const r = this._diffResult;
-
-    const addedIds = new Set(r.added.map(a => a.id));
-    const removedIds = new Set(r.removed.map(a => a.id));
-    const changedIds = new Set(r.changed.map(a => a.id));
-    const changedReasons = new Map(r.changed.map(a => [a.id, a.reason]));
-
-    // In group mode, we need to check if any node in a group is affected
-    const groupDiff = new Map(); // groupType -> { added, removed, changed, unchanged }
-
-    // Process all visible nodes
-    this.cy.nodes().forEach(node => {
-      const id = node.id();
-      const isGroup = node.data('isGroup');
-
-      if (isGroup) {
-        // For group nodes, aggregate diff status of children
-        const groupType = node.data('groupType') || id;
-        const childNodes = this.data.nodes.filter(n => n.type === groupType);
-        let gAdded = 0, gRemoved = 0, gChanged = 0, gUnchanged = 0;
-        childNodes.forEach(cn => {
-          if (addedIds.has(cn.id)) gAdded++;
-          else if (removedIds.has(cn.id)) gRemoved++;
-          else if (changedIds.has(cn.id)) gChanged++;
-          else gUnchanged++;
-        });
-
-        // Color group by dominant change
-        let color, borderColor, borderWidth;
-        if (gAdded > 0 && gAdded >= gChanged && gAdded >= gRemoved) {
-          color = '#C8E6C9'; borderColor = '#43A047'; borderWidth = 3;
-        } else if (gRemoved > 0 && gRemoved >= gChanged) {
-          color = '#FFCDD2'; borderColor = '#E53935'; borderWidth = 3;
-        } else if (gChanged > 0) {
-          color = '#FFF9C4'; borderColor = '#F9A825'; borderWidth = 3;
-        } else {
-          color = '#F5F5F5'; borderColor = '#BDBDBD'; borderWidth = 1;
-        }
-
-        node.style({
-          'background-color': color,
-          'border-color': borderColor,
-          'border-width': borderWidth,
-        });
-
-        // Add diff summary label
-        const parts = [];
-        if (gAdded) parts.push(`+${gAdded}`);
-        if (gRemoved) parts.push(`-${gRemoved}`);
-        if (gChanged) parts.push(`~${gChanged}`);
-        if (parts.length > 0) {
-          node.data('diffLabel', parts.join(' '));
-        }
-      } else {
-        // Individual node
-        if (addedIds.has(id)) {
-          node.style({
-            'background-color': '#43A047',
-            'border-color': '#2E7D32',
-            'border-width': 3,
-            'color': '#fff',
-          });
-        } else if (removedIds.has(id)) {
-          node.style({
-            'background-color': '#E53935',
-            'border-color': '#C62828',
-            'border-width': 3,
-            'color': '#fff',
-            'opacity': 0.7,
-          });
-        } else if (changedIds.has(id)) {
-          node.style({
-            'background-color': '#FFF9C4',
-            'border-color': '#F9A825',
-            'border-width': 3,
-            'color': '#333',
-          });
-        } else {
-          // Unchanged - dim it
-          node.style({
-            'opacity': 0.35,
-            'border-width': 1,
-          });
-        }
-      }
-    });
-
-    // Style edges
-    const addedEdgeSet = new Set(r.addedEdges);
-    const removedEdgeSet = new Set(r.removedEdges);
-    this.cy.edges().forEach(edge => {
-      const key = `${edge.data('source')}|${edge.data('target')}|${edge.data('edgeType') || 'depends_on'}`;
-      if (addedEdgeSet.has(key)) {
-        edge.style({ 'line-color': '#43A047', 'width': 3, 'opacity': 1, 'target-arrow-color': '#43A047' });
-      } else if (removedEdgeSet.has(key)) {
-        edge.style({ 'line-color': '#E53935', 'width': 3, 'opacity': 0.7, 'line-style': 'dashed', 'target-arrow-color': '#E53935' });
-      } else {
-        edge.style({ 'opacity': 0.15 });
-      }
-    });
-  }
-
-  _exitDiffMode() {
-    this._diffMode = false;
-    this._diffResult = null;
-    document.querySelector('.js-rsm-diff-banner')?.classList.remove('visible');
-    document.querySelector('.js-rsm-diff-legend')?.classList.remove('visible');
-    document.querySelector('.js-btn-diff')?.classList.remove('active');
-
-    // Restore normal graph styles
-    if (this.cy) {
-      this.cy.nodes().forEach(n => {
-        n.removeStyle();
-        n.removeData('diffLabel');
-      });
-      this.cy.edges().forEach(e => e.removeStyle());
-    }
-    // Re-apply SLA heatmap if active
-    if (this.slaHeatmap) this._applySlaHeatmap();
-    // Show Quick Actions if no rootCI
-    if (!this.rootCI) this._showQuickActions();
-    this._showToast('Режим сравнения отключён');
   }
 }
 
